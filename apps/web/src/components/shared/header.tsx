@@ -53,9 +53,8 @@ export function Header() {
   const handleSignOut = async () => {
     try {
       await logout();
-      window.location.href = "/auth/login";
     } catch {
-      window.location.href = "/auth/login";
+      window.location.href = "/login";
     }
   };
 

@@ -43,17 +43,18 @@ export default function LoginPage() {
 
     try {
       const response = await authService.signIn(values.email, values.password);
-      logger.info("[LoginPage] Sign in successful", response.user.id);
+      const user = response?.user;
+      logger.info("[LoginPage] Sign in successful", user?.id);
       
-      // Determine redirection based on user metadata role
-      const role = response.user.user_metadata?.role || "candidate";
-      if (role === "candidate") {
-        router.push("/candidate/dashboard");
-      } else if (role === "platform-admin") {
-        router.push("/admin/system");
-      } else {
-        router.push("/recruiter/jobs");
+      const role = user?.user_metadata?.role || "candidate";
+      let redirectPath = "/candidate/dashboard";
+      if (role === "platform-admin") {
+        redirectPath = "/admin/system";
+      } else if (role === "recruiter" || role === "company-admin") {
+        redirectPath = "/recruiter/jobs";
       }
+      
+      window.location.href = redirectPath;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Invalid credentials. Please try again.";
       setErrorMsg(message);

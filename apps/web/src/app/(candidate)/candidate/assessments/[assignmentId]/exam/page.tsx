@@ -1,15 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { createBrowserClient } from "@supabase/ssr";
+
 import { Button } from "@smarthire/ui";
 import { Loader2, ArrowLeft, Clock, AlertTriangle, ShieldCheck } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
 
 interface QuestionOption {
   id: string;
@@ -26,7 +27,7 @@ interface QuestionItem {
 
 export default function CandidateExamPortalPage() {
   const { assignmentId } = useParams() as { assignmentId: string };
-  const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+  const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
   const [loading, setLoading] = React.useState(true);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);

@@ -2,17 +2,17 @@
 
 import * as React from "react";
 import { ApplicationCard, CandidateDrawer, PipelineFilters, MetricsBar, CandidateAppCard } from "@/components/pipeline";
-import { createBrowserClient } from "@supabase/ssr";
 import { logger } from "@smarthire/logger";
 import { SkeletonMetric, SkeletonCard } from "@/components/shared/Skeleton";
-import { CheckCircle2, XCircle, Archive, ChevronRight, Loader2, Briefcase, Sparkles } from "lucide-react";
+import { CheckCircle2, XCircle, Archive, ChevronRight, Loader2, Briefcase, Sparkles, Video, UserCheck, Calendar, Clock, Link as LinkIcon } from "lucide-react";
 import { Button } from "@smarthire/ui";
+import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
 
 // Supabase client
-const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 const columns = [
   { key: "applied", name: "Applied" },
@@ -56,6 +56,25 @@ export default function PipelinePage() {
   const [selectedCodingTemplateId, setSelectedCodingTemplateId] = React.useState("");
   const [codingScheduleTime, setCodingScheduleTime] = React.useState("");
   const [codingSubmitting, setCodingSubmitting] = React.useState(false);
+
+  // Interview scheduling state
+  const [interviewModalOpen, setInterviewModalOpen] = React.useState(false);
+  const [interviewCard, setInterviewCard] = React.useState<CandidateAppCard | null>(null);
+  const [interviewDateTime, setInterviewDateTime] = React.useState("");
+  const [interviewDuration, setInterviewDuration] = React.useState("60");
+  const [interviewerName, setInterviewerName] = React.useState("");
+  const [interviewerEmail, setInterviewerEmail] = React.useState("");
+  const [meetingLink, setMeetingLink] = React.useState("");
+  const [interviewNotes, setInterviewNotes] = React.useState("");
+  const [interviewSubmitting, setInterviewSubmitting] = React.useState(false);
+
+  const getDefaultDatetimeLocal = React.useCallback(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+    const tzOffset = tomorrow.getTimezoneOffset() * 60000;
+    return new Date(tomorrow.getTime() - tzOffset).toISOString().slice(0, 16);
+  }, []);
 
   const fetchPipelineData = React.useCallback(async () => {
     if (!selectedJobId) {
@@ -128,7 +147,7 @@ export default function PipelinePage() {
         // 3. Fetch related jobs list titles
         const jobIds = rawApps.map((a) => a.job_id);
         const { data: jobsList } = await supabase
-          .schema("application")
+          .schema("job")
           .from("jobs")
           .select("id, title")
           .in("id", jobIds);
@@ -244,6 +263,13 @@ export default function PipelinePage() {
 
       if (!res.ok) throw new Error("Status transition API rejected drop");
       logger.info(`[PipelinePage] Application ${appId} dragged to stage: ${targetStatus}`);
+
+      // Auto-open interview scheduling modal if dropped in interview column
+      if (targetStatus === "interview") {
+        setInterviewCard(draggedCard);
+        setInterviewDateTime(draggedCard.interview_scheduled_at ? new Date(new Date(draggedCard.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : getDefaultDatetimeLocal());
+        setInterviewModalOpen(true);
+      }
     } catch (err) {
       logger.error("Drag and drop transition failed, rolling back UI", err);
       // Rollback UI
@@ -394,6 +420,70 @@ export default function PipelinePage() {
       alert(`Scheduling Error: ${msg}`);
     } finally {
       setCodingSubmitting(false);
+    }
+  };
+
+  const handleSaveInterviewSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!interviewCard || !interviewDateTime) return;
+    setInterviewSubmitting(true);
+    try {
+      const parsedDate = new Date(interviewDateTime);
+      const isoDate = isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
+
+      const res = await fetch("/api/interviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicationId: interviewCard.id,
+          scheduledAt: isoDate,
+          durationMinutes: Number(interviewDuration),
+          interviewerName: interviewerName || undefined,
+          interviewerEmail: interviewerEmail || undefined,
+          meetingLink: meetingLink || undefined,
+          notes: interviewNotes || undefined,
+        }),
+      });
+
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resData.error || resData.message || "Failed to schedule interview");
+      }
+
+      // Sync application status to 'interview'
+      await fetch(`/api/applications/${interviewCard.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "interview" }),
+      }).catch(() => {});
+
+      // Optimistic state update & refresh
+      setCards((prev) =>
+        prev.map((c) =>
+          c.id === interviewCard.id
+            ? { ...c, status: "interview", interview_scheduled_at: new Date(interviewDateTime).toISOString() }
+            : c
+        )
+      );
+
+      setInterviewModalOpen(false);
+      const scheduledCandidateName = interviewCard.candidate_name;
+      setInterviewCard(null);
+      setInterviewDateTime("");
+      setInterviewerName("");
+      setInterviewerEmail("");
+      setMeetingLink("");
+      setInterviewNotes("");
+
+      await fetchPipelineData();
+      alert(`✅ Interview successfully scheduled for ${scheduledCandidateName}!`);
+      logger.info(`[PipelinePage] Interview scheduled for application: ${interviewCard.id}`);
+    } catch (err: unknown) {
+      logger.error("Failed to save interview schedule", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Scheduling Error: ${msg}`);
+    } finally {
+      setInterviewSubmitting(false);
     }
   };
 
@@ -551,7 +641,7 @@ export default function PipelinePage() {
                 onClick={() => setActiveBinKey(null)}
                 className="text-zinc-400 hover:text-zinc-650 font-bold text-sm h-8 w-8 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors"
               >
-                ✕
+                âœ•
               </button>
             </div>
 
@@ -862,13 +952,58 @@ export default function PipelinePage() {
                   </div>
                 )}
 
+                {/* Interview scheduling panel */}
+                {col.key === "interview" && (
+                  <div className="mb-3.5 p-3 rounded-xl bg-white border border-[#D2D2D7] shadow-sm space-y-2.5 text-left">
+                    <div className="flex items-center gap-1.5">
+                      <Video className="h-3.5 w-3.5 text-violet-500" />
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Interview Scheduler</span>
+                    </div>
+                    <p className="text-[9px] text-zinc-500 font-medium leading-relaxed">
+                      Click any candidate card, then schedule their interview round with date, time, and meeting link.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-violet-50 border border-violet-100 p-2 text-center">
+                        <p className="text-lg font-extrabold text-violet-700 tabular-nums">{cards.filter(c => c.status === "interview" && c.interview_scheduled_at).length}</p>
+                        <p className="text-[9px] text-violet-500 font-bold uppercase tracking-wide">Scheduled</p>
+                      </div>
+                      <div className="rounded-lg bg-amber-50 border border-amber-100 p-2 text-center">
+                        <p className="text-lg font-extrabold text-amber-700 tabular-nums">{cards.filter(c => c.status === "interview" && !c.interview_scheduled_at).length}</p>
+                        <p className="text-[9px] text-amber-500 font-bold uppercase tracking-wide">Pending</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const firstUnscheduled = cards.find(c => c.status === "interview" && !c.interview_scheduled_at);
+                        const targetCard = firstUnscheduled || cards.find(c => c.status === "interview") || cards[0];
+                        if (targetCard) {
+                          setInterviewCard(targetCard);
+                          setInterviewDateTime(targetCard.interview_scheduled_at ? new Date(new Date(targetCard.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : getDefaultDatetimeLocal());
+                          setInterviewModalOpen(true);
+                        }
+                      }}
+                      className="w-full bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold h-7 rounded-lg flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
+                    >
+                      <UserCheck className="h-3 w-3" /> Schedule Next Interview
+                    </button>
+                  </div>
+                )}
+
                 {/* Column Cards Stack */}
                 <div className="flex-grow space-y-3.5 overflow-y-auto max-h-[600px] pr-1 no-scrollbar">
                   {colCards.map((card) => (
                     <ApplicationCard
                       key={card.id}
                       card={card}
-                      onClick={(c) => setActiveCard(c)}
+                      onClick={(c) => {
+                        if (col.key === "interview") {
+                          setInterviewCard(c);
+                          setInterviewDateTime(c.interview_scheduled_at ? new Date(new Date(c.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : getDefaultDatetimeLocal());
+                          setInterviewModalOpen(true);
+                        } else {
+                          setActiveCard(c);
+                        }
+                      }}
                     />
                   ))}
 
@@ -887,7 +1022,15 @@ export default function PipelinePage() {
       )}
 
       {/* Side Slide-out Details Drawer */}
-      <CandidateDrawer card={activeCard} onClose={() => setActiveCard(null)} />
+      <CandidateDrawer
+        card={activeCard}
+        onClose={() => setActiveCard(null)}
+        onScheduleInterview={(c) => {
+          setInterviewCard(c);
+          setInterviewDateTime(c.interview_scheduled_at ? new Date(new Date(c.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : getDefaultDatetimeLocal());
+          setInterviewModalOpen(true);
+        }}
+      />
 
       {/* MCQ Scheduling Modal */}
       {mcqModalOpen && (
@@ -924,7 +1067,7 @@ export default function PipelinePage() {
                     onChange={(e) => setSelectedTemplateId(e.target.value)}
                     className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 focus:outline-none"
                   >
-                    <option value="">✨ Auto AI Generated (Recommended)</option>
+                    <option value="">âœ¨ Auto AI Generated (Recommended)</option>
                     {assessmentTemplates.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.title}
@@ -1009,7 +1152,7 @@ export default function PipelinePage() {
                     onChange={(e) => setSelectedCodingTemplateId(e.target.value)}
                     className="rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 focus:outline-none"
                   >
-                    <option value="">✨ Auto AI Generated (Recommended)</option>
+                    <option value="">âœ¨ Auto AI Generated (Recommended)</option>
                     {assessmentTemplates.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.title}
@@ -1052,6 +1195,98 @@ export default function PipelinePage() {
                   </>
                 ) : (
                   "Confirm & Schedule Coding Round"
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Interview Scheduling Modal */}
+      {interviewModalOpen && (
+        <div className="fixed inset-0 bg-[#1D1D1F]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <form
+            onSubmit={handleSaveInterviewSchedule}
+            className="w-full max-w-lg bg-white border border-[#D2D2D7] rounded-[20px] shadow-2xl p-6 space-y-5 text-left"
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center">
+                    <Video className="h-4 w-4 text-violet-600" />
+                  </div>
+                  <h3 className="text-base font-bold text-zinc-900">Schedule Interview</h3>
+                </div>
+                {interviewCard && (
+                  <p className="text-[11px] text-zinc-500 font-medium">
+                    Candidate: <span className="font-bold text-zinc-800">{interviewCard.candidate_name}</span> — {interviewCard.job_title}
+                  </p>
+                )}
+              </div>
+              <button type="button" onClick={() => { setInterviewModalOpen(false); setInterviewCard(null); }}
+                className="text-zinc-400 hover:text-zinc-700 h-8 w-8 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors">
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* Date & Time */}
+              <div className="col-span-2 space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
+                  <Calendar className="h-3 w-3" /> Interview Date & Time *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={interviewDateTime}
+                  onChange={e => setInterviewDateTime(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-[13px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Duration */}
+              <div className="col-span-2 space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
+                  <Clock className="h-3 w-3" /> Duration
+                </label>
+                <select
+                  value={interviewDuration}
+                  onChange={e => setInterviewDuration(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-[13px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none"
+                >
+                  <option value="30">30 minutes</option>
+                  <option value="45">45 minutes</option>
+                  <option value="60">60 minutes</option>
+                  <option value="90">90 minutes</option>
+                  <option value="120">2 hours</option>
+                </select>
+              </div>
+
+              {/* Notes */}
+              <div className="col-span-2 space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Focus Topics / Notes (Optional)</label>
+                <textarea
+                  value={interviewNotes}
+                  onChange={e => setInterviewNotes(e.target.value)}
+                  placeholder="Topics to cover, specific technical areas for AI to probe..."
+                  rows={2}
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-[12px] text-zinc-800 focus:border-violet-500 focus:outline-none resize-none placeholder:text-zinc-300"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2 border-t border-zinc-100">
+              <button type="button" onClick={() => { setInterviewModalOpen(false); setInterviewCard(null); }}
+                className="px-4 py-2 text-[12px] font-bold text-zinc-600 rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer">
+                Cancel
+              </button>
+              <button type="submit" disabled={interviewSubmitting || !interviewDateTime}
+                className="bg-violet-600 hover:bg-violet-700 text-white text-[12px] font-bold px-5 py-2 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                {interviewSubmitting ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Scheduling...</>
+                ) : (
+                  <><Video className="h-3.5 w-3.5" /> Confirm Interview</>
                 )}
               </button>
             </div>

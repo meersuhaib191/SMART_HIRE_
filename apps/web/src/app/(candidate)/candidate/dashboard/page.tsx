@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
 import {
   UserCheck,
   FileSpreadsheet,
@@ -14,12 +13,13 @@ import {
 } from "lucide-react";
 import { Button } from "@smarthire/ui";
 import { logger } from "@smarthire/logger";
+import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
 
 // Supabase client
-const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 interface RecommendedJob {
   id: string;
@@ -273,7 +273,7 @@ export default function CandidateDashboardPage() {
                     <h4 className="font-bold text-zinc-900 capitalize">{int.interview_type.replace("-", " ")} Session</h4>
                     <div className="flex items-center gap-2 text-[10px] text-zinc-700">
                       <span>{new Date(int.scheduled_at).toLocaleString()}</span>
-                      <span>•</span>
+                      <span>â€¢</span>
                       <span>{int.duration_minutes} mins</span>
                     </div>
                   </div>
@@ -338,7 +338,7 @@ export default function CandidateDashboardPage() {
                   <Link href={`/candidate/jobs/${job.id}`} className="font-bold text-zinc-800 hover:text-blue-500 block truncate">
                     {job.title}
                   </Link>
-                  <span className="text-[10px] text-zinc-700 capitalize">{job.department} • {job.location}</span>
+                  <span className="text-[10px] text-zinc-700 capitalize">{job.department} â€¢ {job.location}</span>
                 </div>
               ))}
 

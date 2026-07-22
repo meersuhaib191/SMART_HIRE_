@@ -7,15 +7,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { AuthCard, FormField } from "@/components/auth";
 import { Button } from "@smarthire/ui";
-import { createBrowserClient } from "@supabase/ssr";
 import { ArrowLeft, ArrowRight, Loader2, Sparkles, Check } from "lucide-react";
 import { logger } from "@smarthire/logger";
+import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
 
 // Supabase Client
-const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 const jobWizardSchema = z.object({
   // Step 1
@@ -44,8 +44,6 @@ const jobWizardSchema = z.object({
 type JobWizardValues = z.infer<typeof jobWizardSchema>;
 
 const LOCAL_STORAGE_KEY = "smarthire_create_job_wizard";
-
-
 
 export default function CreateJobPage() {
   const router = useRouter();
@@ -299,7 +297,7 @@ export default function CreateJobPage() {
       subtitle={
         <div className="flex items-center gap-1.5 justify-center text-[12px] text-[#6E6E73] font-semibold mt-1">
           <span>Step {activeStep} of 4</span>
-          <span className="text-[#AEAEB2]">•</span>
+          <span className="text-[#AEAEB2]">â€¢</span>
           <span className="text-[#0071E3]">
             {activeStep === 1
               ? "Basic Details"
@@ -534,7 +532,7 @@ export default function CreateJobPage() {
                   ))}
               </select>
               {assessmentTemplates.filter((t) => t.description === "mcq_bank").length === 0 && (
-                <p className="text-[11px] text-[#AEAEB2] mt-1">No MCQ banks found. Create one in Settings → MCQ Banks.</p>
+                <p className="text-[11px] text-[#AEAEB2] mt-1">No MCQ banks found. Create one in Settings â†’ MCQ Banks.</p>
               )}
             </div>
 
@@ -558,7 +556,7 @@ export default function CreateJobPage() {
                   ))}
               </select>
               {assessmentTemplates.filter((t) => t.description === "coding_test").length === 0 && (
-                <p className="text-[11px] text-[#AEAEB2] mt-1">No coding banks found. Create one in Settings → Coding Tests.</p>
+                <p className="text-[11px] text-[#AEAEB2] mt-1">No coding banks found. Create one in Settings â†’ Coding Tests.</p>
               )}
             </div>
           </div>

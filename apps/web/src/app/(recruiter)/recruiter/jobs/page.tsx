@@ -5,6 +5,7 @@ import Link from "next/link";
 import { JobTable, JobCard, JobFilters, JobAnalyticsCard, EmptyState, ConfirmDialog } from "@/components/jobs";
 import { Button } from "@smarthire/ui";
 import {
+
   Plus,
   Briefcase,
   Layers,
@@ -17,9 +18,10 @@ import { logger } from "@smarthire/logger";
 import { SkeletonTable } from "@/components/shared/Skeleton";
 import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
-const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
+
+const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 interface JobItem {
   id: string;
@@ -267,7 +269,7 @@ export default function JobsPage() {
               >
                 Publish
               </button>
-              <span className="text-[#AEAEB2]">•</span>
+              <span className="text-[#AEAEB2]">â€¢</span>
               <button
                 onClick={() => setBulkActionType("archive")}
                 className="hover:underline font-semibold text-[#0071E3]"
@@ -275,7 +277,7 @@ export default function JobsPage() {
               >
                 Archive
               </button>
-              <span className="text-[#AEAEB2]">•</span>
+              <span className="text-[#AEAEB2]">â€¢</span>
               <button
                 onClick={() => setBulkActionType("delete")}
                 className="hover:underline text-[#FF3B30] font-semibold"

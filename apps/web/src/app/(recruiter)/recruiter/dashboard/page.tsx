@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import {
+
   MetricCard,
   ChartCard,
   TaskList,
@@ -12,7 +13,6 @@ import {
   DashboardInterview,
   DashboardApp,
 } from "@/components/dashboard";
-import { createBrowserClient } from "@supabase/ssr";
 import {
   Briefcase,
   Users,
@@ -23,12 +23,13 @@ import {
 } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { SkeletonDashboard } from "@/components/shared/Skeleton";
+import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
 
 // Supabase client
-const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 export default function RecruiterDashboardPage() {
   const [loading, setLoading] = React.useState(true);
@@ -276,8 +277,6 @@ export default function RecruiterDashboardPage() {
     { label: "Scheduled Interviews", value: interviewsToday.length, subtext: "Happening today", icon: Video, color: "text-[#34C759] bg-[#EAFBEE] border-[#C5F0D2]" },
     { label: "Offers Issued", value: offersCount, subtext: "Sent this month", icon: Award, color: "text-[#FF9F0A] bg-[#FFF8EE] border-[#FFE8C2]" },
   ];
-
-
 
   if (loading) {
     return <SkeletonDashboard />;

@@ -1,17 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/utils/supabase/client";
 import { Button } from "@smarthire/ui";
 import { Plus, Trash2, Loader2, Building, Clipboard } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { SkeletonPageHeader, SkeletonCard } from "@/components/shared/Skeleton";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
-
-// Supabase client
-const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+// Use the shared sanitizing client factory (filters out dummy system env vars)
+const supabase = createClient();
 
 
 

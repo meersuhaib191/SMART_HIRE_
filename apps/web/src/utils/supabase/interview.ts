@@ -8,8 +8,8 @@ export async function createInterviewClient() {
   const cookieStore = await cookies();
 
   const client = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key",
+    (() => { const e = process.env.NEXT_PUBLIC_SUPABASE_URL || ""; return (!e || e.includes("your-project") || e.includes("placeholder")) ? "https://yljipgjfkfwacaspifcq.supabase.co" : e; })(),
+    (() => { const k = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""; return (!k || k === "your_anon_key" || k.includes("placeholder") || k.includes("your-project")) ? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg" : k; })(),
     {
       db: {
         schema: "interview",

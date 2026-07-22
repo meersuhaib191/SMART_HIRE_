@@ -3,17 +3,18 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+
 import { ArrowLeft, MapPin, Mail, Phone, Calendar } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { SkeletonPageHeader, SkeletonCard } from "@/components/shared/Skeleton";
+import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
 
 // Supabase clients for schemas
-const candClient = createBrowserClient(supabaseUrl, supabaseKey, { db: { schema: "candidate" } });
-const appClient = createBrowserClient(supabaseUrl, supabaseKey, { db: { schema: "application" } });
+const candClient = createBrowserClient(REAL_URL, REAL_KEY, { db: { schema: "candidate" } });
+const appClient = createBrowserClient(REAL_URL, REAL_KEY, { db: { schema: "application" } });
 
 interface CandidateDetails {
   id: string;

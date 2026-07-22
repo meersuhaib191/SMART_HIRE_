@@ -1,15 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { Loader2, Calendar, Video, Clock } from "lucide-react";
 import { logger } from "@smarthire/logger";
+import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
 
 // Supabase client
-const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 interface CandidateInterview {
   id: string;
@@ -32,12 +32,12 @@ export default function CandidateInterviewsPage() {
         const { data: meetings, error } = await supabase
           .schema("interview")
           .from("interviews")
-          .select("id, interview_type, status, scheduled_at, duration_minutes, meeting_link, application_id")
-          .order("scheduled_at", { ascending: true });
+          .select("*");
 
         if (error) throw error;
 
-        const rawList = meetings || [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawList: any[] = meetings || [];
         if (rawList.length > 0) {
           const appIds = rawList.map((m) => m.application_id);
           const { data: apps } = await supabase.schema("application").from("applications").select("id, job_id").in("id", appIds);
@@ -55,12 +55,12 @@ export default function CandidateInterviewsPage() {
 
             return {
               id: meet.id,
-              interview_type: meet.interview_type,
-              status: meet.status,
-              scheduled_at: meet.scheduled_at,
-              duration_minutes: meet.duration_minutes,
+              interview_type: meet.type || meet.interview_type || "Technical",
+              status: meet.status || "scheduled",
+              scheduled_at: meet.start_time || meet.scheduled_at || new Date().toISOString(),
+              duration_minutes: meet.duration_minutes || 60,
               meeting_link: meet.meeting_link,
-              job_title: job ? job.title : "Technical Opening",
+              job_title: job ? job.title : "Technical Position",
             };
           });
 
@@ -134,7 +134,7 @@ export default function CandidateInterviewsPage() {
                   <Calendar className="h-3.5 w-3.5 shrink-0" />
                   <span>{new Date(int.scheduled_at).toLocaleString()}</span>
                 </div>
-                <span>•</span>
+                <span>â€¢</span>
                 <div className="flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5 shrink-0" />
                   <span>{int.duration_minutes} Mins</span>
@@ -143,18 +143,12 @@ export default function CandidateInterviewsPage() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {int.meeting_link ? (
-                <a
-                  href={int.meeting_link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 bg-[#0071E3] hover:bg-[#006ACC] text-white rounded-lg px-4 py-2 text-xs font-bold h-9 shadow-sm"
-                >
-                  <Video className="h-4 w-4" /> Join Video Call
-                </a>
-              ) : (
-                <span className="text-zinc-700 text-xs italic">Awaiting meeting link</span>
-              )}
+              <a
+                href={`/candidate/interview/${int.id}/room`}
+                className="inline-flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg px-4 py-2 text-xs font-bold h-9 shadow-sm transition-all"
+              >
+                <Video className="h-4 w-4" /> Enter AI Video Room
+              </a>
             </div>
           </div>
         ))}

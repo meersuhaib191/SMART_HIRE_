@@ -3,8 +3,8 @@
 import * as React from "react";
 import { CandidateTable, CandidateCard } from "@/components/candidates";
 import { EmptyState } from "@/components/jobs";
-import { createBrowserClient } from "@supabase/ssr";
 import {
+
   Search,
   SlidersHorizontal,
   RotateCcw,
@@ -17,12 +17,13 @@ import {
 import { Button } from "@smarthire/ui";
 import { logger } from "@smarthire/logger";
 import { SkeletonTable } from "@/components/shared/Skeleton";
+import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
 
 // Supabase client
-const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 interface Candidate {
   id: string;

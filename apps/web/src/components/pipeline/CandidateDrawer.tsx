@@ -1,20 +1,22 @@
 "use client";
 
 import * as React from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { NotesPanel, TagSelector, NoteItem } from "@/components/candidates";
-import { X, Mail, Briefcase, GraduationCap, ClipboardCheck, Code2, Star, TrendingUp } from "lucide-react";
+import { X, Mail, Briefcase, GraduationCap, ClipboardCheck, Code2, Star, TrendingUp, UserCheck } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { CandidateAppCard } from "./ApplicationCard";
 import { Skeleton } from "@/components/shared/Skeleton";
+import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
-const candClient = createBrowserClient(supabaseUrl, supabaseKey, { db: { schema: "candidate" } });
+const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
+
+const candClient = createBrowserClient(REAL_URL, REAL_KEY, { db: { schema: "candidate" } });
 
 interface CandidateDrawerProps {
   card: CandidateAppCard | null;
   onClose: () => void;
+  onScheduleInterview?: (card: CandidateAppCard) => void;
 }
 
 interface Education {
@@ -37,7 +39,7 @@ interface Experience {
   is_current: boolean;
 }
 
-export function CandidateDrawer({ card, onClose }: CandidateDrawerProps) {
+export function CandidateDrawer({ card, onClose, onScheduleInterview }: CandidateDrawerProps) {
   const [loading, setLoading] = React.useState(false);
   const [education, setEducation] = React.useState<Education[]>([]);
   const [experience, setExperience] = React.useState<Experience[]>([]);
@@ -97,11 +99,11 @@ export function CandidateDrawer({ card, onClose }: CandidateDrawerProps) {
 
   const handleAddNote = async (content: string) => {
     const newNote: NoteItem = {
-      id: crypto.randomUUID(),
+      id: String(Date.now()),
       content,
-      is_pinned: false,
-      author: "Lead Recruiter",
       created_at: new Date().toISOString(),
+      author: "Recruiter Admin",
+      is_pinned: false,
     };
     const updated = [newNote, ...notes];
     setNotes(updated);
@@ -151,6 +153,19 @@ export function CandidateDrawer({ card, onClose }: CandidateDrawerProps) {
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Schedule Interview Action Button */}
+        {onScheduleInterview && (
+          <button
+            onClick={() => {
+              onScheduleInterview(card);
+              onClose();
+            }}
+            className="w-full bg-[#5E5CE6] hover:bg-[#4B49C6] text-white text-xs font-bold py-2.5 px-4 rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <UserCheck className="h-4 w-4" /> Schedule Interview for {card.candidate_name}
+          </button>
+        )}
 
         {/* Profile Coordinates info */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[12px] text-[#6E6E73] text-left bg-[#F5F5F7] p-4 rounded-[16px] border border-[#D2D2D7]">
@@ -280,31 +295,41 @@ export function CandidateDrawer({ card, onClose }: CandidateDrawerProps) {
                 <span className={`absolute -left-[17px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-[#F5F5F7] ${
                   card.interview_avg_score != null ? "bg-[#0071E3]" : "bg-[#D2D2D7]"
                 }`} />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Star className="h-3.5 w-3.5 text-[#0071E3]" />
-                    <span className="text-[12px] font-semibold text-[#1D1D1F]">Interview</span>
-                  </div>
-                  {card.interview_avg_score != null ? (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-[#0071E3] bg-[#EAF3FF] px-2 py-0.5 rounded-full border border-[#C5DCFF]">
-                        {card.interview_avg_score}/5
-                      </span>
-                      {card.interview_recommendation && (
-                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full border ${
-                          card.interview_recommendation === "strong_hire" || card.interview_recommendation === "hire"
-                            ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                            : card.interview_recommendation === "neutral"
-                              ? "text-amber-700 bg-amber-50 border-amber-200"
-                              : "text-red-700 bg-red-50 border-red-200"
-                        }`}>
-                          {card.interview_recommendation.replace(/_/g, " ")}
-                        </span>
-                      )}
+                      <Star className="h-3.5 w-3.5 text-[#0071E3]" />
+                      <span className="text-[12px] font-semibold text-[#1D1D1F]">AI Video Interview</span>
                     </div>
-                  ) : (
-                    <span className="text-[10px] text-[#AEAEB2] italic font-medium">Awaiting</span>
-                  )}
+                    {card.interview_avg_score != null ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-bold text-[#0071E3] bg-[#EAF3FF] px-2 py-0.5 rounded-full border border-[#C5DCFF]">
+                          {card.interview_avg_score}/5
+                        </span>
+                        {card.interview_recommendation && (
+                          <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full border ${
+                            card.interview_recommendation === "strong_hire" || card.interview_recommendation === "hire"
+                              ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                              : card.interview_recommendation === "neutral"
+                                ? "text-amber-700 bg-amber-50 border-amber-200"
+                                : "text-red-700 bg-red-50 border-red-200"
+                          }`}>
+                            {card.interview_recommendation.replace(/_/g, " ")}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-[#AEAEB2] italic font-medium">Awaiting</span>
+                    )}
+                  </div>
+                  <div className="pt-1">
+                    <a
+                      href={`/recruiter/interviews/${card.id}`}
+                      className="text-[10px] font-bold text-[#0071E3] hover:underline inline-flex items-center gap-1"
+                    >
+                      Audit AI Video Interview & Transcript →
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
