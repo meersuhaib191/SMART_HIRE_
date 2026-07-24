@@ -11,7 +11,7 @@ Software testing for SmartHire was conducted across five levels: unit testing, i
 
 \textbf{Integration testing} verifies that multiple modules work correctly together. For example, testing the application submission flow requires the authentication module, resume upload service, ATS scoring service, and database layer to cooperate correctly.
 
-\textbf{System testing} evaluates the complete application from the user's perspective, simulating end-to-end workflows such as ``candidate applies for a job, completes all assessments, and receives an offer.''
+\textbf{System testing} evaluates the complete application from the user's perspective, simulating end-to-end workflows such as `candidate applies for a job, completes all assessments, and receives an offer.''
 
 \textbf{Performance testing} measures response times under varying load conditions to identify bottlenecks.
 
@@ -20,12 +20,16 @@ Software testing for SmartHire was conducted across five levels: unit testing, i
 \section{Unit Test Cases}
 \label{sec:unit-tests}
 
-\begin{table}[htbp]
+Unit testing was conducted to verify individual service functions, validation rules, and mathematical scoring algorithms in complete isolation. Test suites were written to validate key domain logic across authentication, job management, ATS resume scoring, MCQ assessment evaluation, coding execution string comparisons, and PDF offer letter generation.
+
+Table~\ref{tab:unit-tests} presents the representative unit test cases, including test target components, input conditions, expected execution behavior, and verification status.
+
+\begin{table}[H]
 \centering
 \caption{Unit test cases}
 \label{tab:unit-tests}
 \small
-\begin{tabular}{p{0.6in}p{1.4in}p{1.5in}p{1.5in}p{0.5in}}
+\begin{tabularx}{\textwidth}{l X X X c}
 \toprule
 \textbf{ID} & \textbf{Component} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
 \midrule
@@ -34,8 +38,8 @@ UT-02 & Auth service & Invalid password & Error 401 returned & Pass \\
 UT-03 & Auth service & Empty email field & Validation error & Pass \\
 UT-04 & Job service & Create job with valid data & Job record created with draft status & Pass \\
 UT-05 & Job service & Create job missing title & Validation error & Pass \\
-UT-06 & ATS scoring & Resume with matching skills & Score $\geq$ 7 & Pass \\
-UT-07 & ATS scoring & Resume with no matching skills & Score $\leq$ 3 & Pass \\
+UT-06 & ATS scoring & Resume with matching skills & Score $\ge$ 7 & Pass \\
+UT-07 & ATS scoring & Resume with no matching skills & Score $\le$ 3 & Pass \\
 UT-08 & MCQ scoring & All correct answers & Score = 100\% & Pass \\
 UT-09 & MCQ scoring & No correct answers & Score = 0\% & Pass \\
 UT-10 & MCQ scoring & Partial correct answers & Score proportional & Pass \\
@@ -44,18 +48,22 @@ UT-12 & Coding scorer & Compilation error & Score = 0\%, error message & Pass \\
 UT-13 & Offer generator & Valid input data & PDF generated without errors & Pass \\
 UT-14 & Offer generator & Missing salary field & Validation error & Pass \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \section{Integration Test Cases}
 \label{sec:integration-tests}
 
-\begin{table}[htbp]
+Integration testing verified the interaction between distinct platform sub-systems, such as API route handlers, Supabase database transactions, Storage buckets, and external AI services. These tests ensure that data flows seamlessly across system boundaries without data corruption or state mismatches.
+
+Table~\ref{tab:integration-tests} details the integration test scenarios spanning registration workflows, job publishing, ATS evaluation triggers, assessment submissions, and offer letter dispatching.
+
+\begin{table}[H]
 \centering
 \caption{Integration test cases}
 \label{tab:integration-tests}
 \small
-\begin{tabular}{p{0.6in}p{1.8in}p{1.5in}p{1.5in}p{0.5in}}
+\begin{tabularx}{\textwidth}{l X X X c}
 \toprule
 \textbf{ID} & \textbf{Workflow} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
 \midrule
@@ -68,18 +76,22 @@ IT-06 & Interview $\to$ Scorecard & Record and submit & AI scorecard generated &
 IT-07 & Pipeline $\to$ Reject & Move card to rejected & Rejection stage recorded & Pass \\
 IT-08 & Offer $\to$ Accept & Generate and accept offer & Application status = hired & Pass \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \section{System Test Cases}
 \label{sec:system-tests}
 
-\begin{table}[htbp]
+System testing evaluated the complete, end-to-end user journeys from the perspective of both candidates and recruiters. These tests simulated real-world recruitment cycles, verifying multi-tenant data boundaries, browser timers, rejection stage tracking, and administrative analytics dashboards.
+
+Table~\ref{tab:system-tests} outlines the system-level test cases and their empirical verification outcomes.
+
+\begin{table}[H]
 \centering
 \caption{System-level end-to-end test cases}
 \label{tab:system-tests}
 \small
-\begin{tabular}{p{0.6in}p{2in}p{1.3in}p{1.3in}p{0.5in}}
+\begin{tabularx}{\textwidth}{l X X X c}
 \toprule
 \textbf{ID} & \textbf{Scenario} & \textbf{Expected Outcome} & \textbf{Actual Outcome} & \textbf{Status} \\
 \midrule
@@ -90,20 +102,22 @@ ST-04 & Timer expiry during MCQ exam & Auto-submission occurs & Auto-submission 
 ST-05 & Candidate rejected at coding stage views feedback & Rejection stage shown & Rejection stage shown & Pass \\
 ST-06 & Admin dashboard shows platform-wide metrics & Aggregated data displayed & Aggregated data displayed & Pass \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \section{Performance Testing}
 \label{sec:perf-tests}
 
-Performance was measured for key operations under normal load conditions (single concurrent user) and moderate load (ten concurrent simulated users).
+Performance benchmarks were established to evaluate platform responsiveness, API latency, and database query throughput. Benchmarks were recorded under baseline conditions (single active user) and simulated moderate load (ten concurrent users executing operations simultaneously).
 
-\begin{table}[htbp]
+Table~\ref{tab:perf-tests} presents the empirical response times across core platform operations alongside target latency thresholds.
+
+\begin{table}[H]
 \centering
 \caption{Performance test results}
 \label{tab:perf-tests}
 \small
-\begin{tabular}{p{2.2in}ccc}
+\begin{tabularx}{\textwidth}{X c c c}
 \toprule
 \textbf{Operation} & \textbf{Single User} & \textbf{10 Users} & \textbf{Target} \\
 \midrule
@@ -115,7 +129,7 @@ Code execution (simple script) & 1.8 s  & 2.9 s  & $<$ 5.0 s \\
 AI interview evaluation        & 4.2 s  & 6.1 s  & $<$ 10.0 s \\
 Offer PDF generation           & 1.1 s  & 1.3 s  & $<$ 3.0 s \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 All operations met their performance targets. The AI interview evaluation took the longest due to the round-trip to the Gemini API, but this is an asynchronous operation that does not block the candidate's interaction.
@@ -123,12 +137,16 @@ All operations met their performance targets. The AI interview evaluation took t
 \section{Security Testing}
 \label{sec:security-tests}
 
-\begin{table}[htbp]
+Security verification assessed system vulnerability against common web application threats, including cross-site scripting (XSS), SQL injection, unauthenticated API access, and cross-tenant data leaks.
+
+Table~\ref{tab:security-tests} summarizes the security test scenarios, testing methodologies, and defensive verification results.
+
+\begin{table}[H]
 \centering
 \caption{Security test results}
 \label{tab:security-tests}
 \small
-\begin{tabular}{p{2in}p{2in}p{1.5in}}
+\begin{tabularx}{\textwidth}{X X c}
 \toprule
 \textbf{Vulnerability} & \textbf{Test Method} & \textbf{Result} \\
 \midrule
@@ -138,7 +156,7 @@ Unauthorised API access & Called API without valid JWT & 401 Unauthorized return
 Cross-tenant data access & Queried applications with another recruiter's ID & Empty result set \\
 Direct object reference & Accessed application by ID belonging to another candidate & 403 Forbidden returned \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \section{Bug Report Summary}
