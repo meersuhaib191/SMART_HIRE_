@@ -157,28 +157,6 @@ When a candidate applies for a job, the system must extract text from the upload
   \item The API response is parsed, validated, and stored in the application record.
 \end{enumerate}
 
-\subsection{ATS Scoring Prompt Design}
-
-The quality of AI-generated scores depends critically on the prompt. SmartHire uses a structured prompt that specifies the expected output format, scoring dimensions, and scale:
-
-\begin{lstlisting}[language={}, caption={Simplified ATS scoring prompt template}]
-Evaluate the following resume against the job description.
-Provide scores on a scale of 0 to 10 for each dimension:
-- Skills Match: How well do the candidate's skills
-  align with the required skills?
-- Experience Relevance: How relevant is the
-  candidate's work experience?
-- Overall Fit: Composite score considering all factors.
-
-Job Description: {job_description}
-Resume Text: {resume_text}
-
-Respond in JSON format:
-{ "skills_match": <number>,
-  "experience_relevance": <number>,
-  "overall_fit": <number> }
-\end{lstlisting}
-
 \section{Module 5: MCQ Assessment Engine}
 \label{sec:impl-mcq}
 
