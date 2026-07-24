@@ -23,6 +23,10 @@ SmartHire supports three categories of users, each with distinct permissions and
 
 \subsection{Candidate Portal Requirements}
 
+The Candidate Portal serves as the primary interface for job seekers using the platform. Candidates require an intuitive, frictionless experience that allows them to discover opportunities, present their credentials, complete technical evaluations, and track their progress transparently across all hiring stages.
+
+Key functional capabilities of the candidate portal include account registration, profile management, searchable job directory browsing, resume upload with automated text extraction, multi-stage assessment participation (timed MCQs, interactive browser-based coding, and AI video interviews), real-time application tracking with explicit stage-by-stage status feedback, and offer letter review. Table~\ref{tab:fr-candidate} summarizes the specific functional requirement statements for the Candidate Portal.
+
 \begin{table}[htbp]
 \centering
 \caption{Functional requirements: Candidate Portal}
@@ -48,6 +52,10 @@ FR-C10 & The system shall allow candidates to view, accept, or decline offer let
 
 \subsection{Recruiter Portal Requirements}
 
+The Recruiter Portal provides talent acquisition professionals and hiring managers with tools to streamline the end-to-end recruitment process. Recruiters require capabilities to publish job postings, evaluate candidate pools through automated scoring, manage candidate progression through visual pipeline boards, conduct interviews, and execute hiring decisions.
+
+The portal enforces multi-tenant data isolation, ensuring that recruiters access only candidate and job data associated with their registered organization. Core features include a multi-step job creation wizard, automated ATS screening controls, candidate scorecard views combining ATS, MCQ, coding, and AI video interview metrics, interactive interview scheduling, customizable PDF offer letter generation, and real-time hiring funnel analytics. Table~\ref{tab:fr-recruiter} outlines the functional requirements for the Recruiter Portal.
+
 \begin{table}[htbp]
 \centering
 \caption{Functional requirements: Recruiter Portal}
@@ -69,6 +77,10 @@ FR-R07 & The system shall provide a dashboard showing hiring metrics (open posit
 \end{table}
 
 \subsection{Administration Requirements}
+
+The Administration module provides system operators with platform-wide visibility and governance controls. Administrators require high-level operational insights to monitor platform usage, manage user access, enforce security policies, and verify system integrity.
+
+Administrative capabilities include aggregated platform analytics (tracking total registered candidates, active recruiting organizations, application throughput, and stage conversion rates), user account management (role assignment, credential resets, and account suspension), and centralized audit logging for compliance and troubleshooting. Table~\ref{tab:fr-admin} specifies the functional requirements for the Administration module.
 
 \begin{table}[htbp]
 \centering

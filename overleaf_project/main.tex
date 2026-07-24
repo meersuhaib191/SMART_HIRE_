@@ -28,7 +28,7 @@
 
 % ===== SPACING & LAYOUT CONTROLS =====
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{0.6em}
+\setlength{\parskip}{0.4em}
 \raggedbottom
 \widowpenalty=10000
 \clubpenalty=10000
@@ -90,7 +90,9 @@
 % ===== CHAPTER FORMAT (suppress "Chapter X" on text pages) =====
 \titleformat{\chapter}[display]
   {\normalfont\Huge\bfseries\centering}{}{0pt}{}
-\titlespacing*{\chapter}{0pt}{-20pt}{20pt}
+\titlespacing*{\chapter}{0pt}{-15pt}{15pt}
+\titlespacing*{\section}{0pt}{10pt}{5pt}
+\titlespacing*{\subsection}{0pt}{8pt}{4pt}
 
 \titleformat{\section}{\normalfont\Large\bfseries}{\thesection}{1em}{}
 \titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{1em}{}
