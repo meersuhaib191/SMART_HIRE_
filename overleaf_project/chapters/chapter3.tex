@@ -194,6 +194,10 @@ Figure~\ref{fig:usecase} presents a high-level use case diagram identifying the 
 \section{Technology Stack}
 \label{sec:techstack}
 
+SmartHire is architected using a modern full-stack web technology stack designed for high developer productivity, type safety, low latency, and seamless scalability. The application leverages Next.js~15's App Router architecture on the frontend, combined with React~19 and TypeScript~5 for building type-safe, component-driven user interfaces. Styling is implemented using Tailwind CSS for rapid, uniform UI design, supported by Lucide React for consistent icon design.
+
+The core database and authentication infrastructure is powered by Supabase PostgreSQL, offering managed relational storage, Row-Level Security (RLS) policies, and integrated JWT authentication. Interactive technical evaluations rely on the Monaco Editor engine for browser-based code editing, while AI evaluations are executed using Google's Gemini API for resume ATS parsing and interview scorecard generation. Table~\ref{tab:techstack} summarizes the complete technology stack across all architectural layers.
+
 \begin{table}[htbp]
 \centering
 \caption{Technology stack}
@@ -223,6 +227,10 @@ Package Manager      & pnpm                   & Fast, disk-efficient dependency 
 \label{sec:hw-sw}
 
 \subsection{Development Environment}
+
+Setting up the local development environment requires a modern 64-bit workstation operating system capable of running Node.js~18+ and managing monorepo workspace dependencies. Developer machines require at least 8~GB of RAM (16~GB recommended) to comfortably run concurrent development servers, browser developer tools, and Visual Studio Code extensions.
+
+Local development relies on pnpm workspaces for fast, disk-efficient package management across the repository. Developers configure local environment variables (\texttt{.env.local}) to connect to Supabase development instances and Google Gemini API endpoints. Table~\ref{tab:dev-env} outlines the hardware and software specifications for the development environment.
 
 \begin{table}[htbp]
 \centering

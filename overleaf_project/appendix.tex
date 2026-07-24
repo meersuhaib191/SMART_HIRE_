@@ -61,6 +61,8 @@ position    & VARCHAR(100) & Recruiter's job title \\
 
 \section*{A.3\quad \texttt{job} Schema}
 
+The \texttt{job} schema encapsulates all data structures related to job postings, positioning criteria, required skill tags, and lifecycle visibility states. The primary table, \texttt{job.jobs}, links each posting to its creating recruiter and company, maintaining foreign key constraints back to the \texttt{organization.recruiters} table. Postings transition through state machines (\texttt{draft} $\rightarrow$ \texttt{published} $\rightarrow$ \texttt{closed}) governing their public discovery on the candidate portal. Table~\ref{tab:job-schema} details the schema fields, data types, and key constraints for the \texttt{job.jobs} table.
+
 \begin{table}[htbp]
 \centering
 \caption{\texttt{job.jobs} table}
