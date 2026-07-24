@@ -41,7 +41,7 @@
 % ----------- (Decorative Accent Rule)
 \newcommand{\makechaptertitlepage}[2]{%
 \cleardoublepage
-\thispagestyle{empty}
+\thispagestyle{fancy}
 
 \vspace*{\fill}
 
@@ -113,19 +113,27 @@
   captionpos=b
 }
 
-% ===== HEADERS & FOOTERS =====
+% ===== HEADERS & FOOTERS ON ALL PAGES =====
 \pagestyle{fancy}
 \fancyhf{}
-% Header: Left = SMARTHIRE : Hiring Solutions, Right = 2026
 \lhead{\small\scshape SMARTHIRE : Hiring Solutions}
 \rhead{\small\scshape 2026}
-
-% Footer: Left = Department of CSE, North Campus, University of Kashmir, Right = Page Number
 \lfoot{\small\scshape Department of CSE, North Campus, University of Kashmir}
 \rfoot{\thepage}
 
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0.4pt}
+
+% Ensure plain page style (chapter opening pages) also displays headers & footers
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \lhead{\small\scshape SMARTHIRE : Hiring Solutions}%
+  \rhead{\small\scshape 2026}%
+  \lfoot{\small\scshape Department of CSE, North Campus, University of Kashmir}%
+  \rfoot{\thepage}%
+  \renewcommand{\headrulewidth}{0.4pt}%
+  \renewcommand{\footrulewidth}{0.4pt}%
+}
 
 % ===================================================================
 \begin{document}
