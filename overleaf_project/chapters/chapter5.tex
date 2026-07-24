@@ -28,6 +28,13 @@ The \texttt{services/} directory contains the business logic, separated into dom
 \section{Module 1: Authentication and Session Management}
 \label{sec:impl-auth}
 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/login and registration interface.png}
+  \caption{Login and registration interface}
+  \label{fig:login_register}
+\end{figure}
+
 \subsection{Purpose}
 
 The authentication module handles user registration, login, session token management, and role-based access control. It must distinguish between three user roles (candidate, recruiter, administrator) and route each user to the appropriate portal upon successful authentication.
@@ -67,15 +74,15 @@ The conditional check on \texttt{typeof window} ensures that server-side renderi
 
 Passwords are hashed by Supabase using bcrypt with a configurable cost factor. JWT tokens are stored in HTTP-only cookies to prevent cross-site scripting (XSS) attacks from accessing them. API routes validate the JWT on every request using Supabase's \texttt{getUser()} method, which verifies the token signature and checks expiration.
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{images/login and registration interface.png}
-  \caption{Login and registration interface}
-  \label{fig:login_register}
-\end{figure}
-
 \section{Module 2: Job Management}
 \label{sec:impl-jobs}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/job creation interface.png}
+  \caption{Job creation wizard interface showcasing light mode theme and multi-step positioning parameters.}
+  \label{fig:job_creation}
+\end{figure}
 
 \subsection{Purpose}
 
@@ -101,15 +108,22 @@ async function getJobsByRecruiter(recruiterId: string) {
 }
 \end{lstlisting}
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{images/job_creation.png}
-  \caption{Job creation wizard interface showcasing light mode theme and multi-step positioning parameters.}
-  \label{fig:job_creation}
-\end{figure}
-
 \section{Module 3: Candidate Profile and Job Directory}
 \label{sec:impl-candidate}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/candidate job dirwithsearchfilters.png}
+  \caption{Candidate job directory with search filters}
+  \label{fig:candidate_job_directory}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/candidate profile editor.png}
+  \caption{Candidate profile editor interface}
+  \label{fig:candidate_profile_editor}
+\end{figure}
 
 \subsection{Purpose}
 
@@ -119,22 +133,15 @@ Candidates need a profile that stores their personal information, skills, educat
 
 The candidate profile is pre-populated from Supabase Auth metadata (name, email) upon first login, reducing manual data entry. Additional fields (phone, skills array, experience years) are stored in the \texttt{candidate.candidates} table. The job directory page fetches all published jobs using a filtered query and presents them in a searchable, paginated grid. Candidates can filter by keyword, location, job category, and employment type.
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{images/candidate job dirwithsearchfilters.png}
-  \caption{Candidate job directory with search filters}
-  \label{fig:candidate_job_directory}
-\end{figure}
-
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{images/candidate profile editor.png}
-  \caption{Candidate profile editor interface}
-  \label{fig:candidate_profile_editor}
-\end{figure}
-
 \section{Module 4: Resume Upload and ATS Scoring}
 \label{sec:impl-ats}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.65\textwidth]{images/ats view.png}
+  \caption{ATS Board}
+  \label{fig:ats_board}
+\end{figure}
 
 \subsection{Purpose}
 
@@ -172,15 +179,15 @@ Respond in JSON format:
   "overall_fit": <number> }
 \end{lstlisting}
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.65\textwidth]{images/ats view.png}
-  \caption{ATS Board}
-  \label{fig:ats_board}
-\end{figure}
-
 \section{Module 5: MCQ Assessment Engine}
 \label{sec:impl-mcq}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/mcq.png}
+  \caption{MCQ examination interface with countdown timer}
+  \label{fig:mcq_exam}
+\end{figure}
 
 \subsection{Purpose}
 
@@ -192,15 +199,15 @@ Each job can have an associated question pool stored in the \texttt{assessment.q
 
 Score computation is straightforward: the number of correct answers divided by the total number of questions, multiplied by 100. The computed score is stored in the application record.
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{images/mcq.png}
-  \caption{MCQ examination interface with countdown timer}
-  \label{fig:mcq_exam}
-\end{figure}
-
 \section{Module 6: Interactive Coding Assessment}
 \label{sec:impl-coding}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/coding round.png}
+  \caption{coding round ide}
+  \label{fig:coding_ide}
+\end{figure}
 
 \subsection{Purpose}
 
@@ -212,15 +219,15 @@ The code editor is built using \texttt{@monaco-editor/react}, which embeds the s
 
 Each test case specifies an input string and an expected output string. The execution environment runs the candidate's code with the input piped to stdin, captures stdout, and performs a string comparison. Test results are returned to the frontend, showing pass/fail status for each test case. The final score is the percentage of test cases passed.
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{images/coding round.png}
-  \caption{coding round ide}
-  \label{fig:coding_ide}
-\end{figure}
-
 \section{Module 7: AI Video Interview}
 \label{sec:impl-interview}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/ai interview.png}
+  \caption{Live AI video interview recording room with real-time audio transcript, proctoring gaze detection, and voice evaluation.}
+  \label{fig:ai_interview}
+\end{figure}
 
 \subsection{Purpose}
 
@@ -254,15 +261,15 @@ The overall recommendation uses a five-point scale:
 \end{tabular}
 \end{table}
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{images/ai_interview.png}
-  \caption{Live AI video interview recording room with real-time audio transcript, proctoring gaze detection, and voice evaluation.}
-  \label{fig:ai_interview}
-\end{figure}
-
 \section{Module 8: Recruiter Kanban Pipeline}
 \label{sec:impl-kanban}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/kanban board.png}
+  \caption{Recruiter Kanban pipeline board showing multi-stage candidate progression and automated ATS screening controls.}
+  \label{fig:pipeline_board}
+\end{figure}
 
 \subsection{Purpose}
 
@@ -274,15 +281,15 @@ The Kanban board is implemented as a client-side React component that fetches al
 
 Stage transitions are validated on the server to ensure they follow the prescribed order. If a recruiter moves a candidate to a rejected state, the system records which stage the rejection occurred at and optionally logs a rejection reason. This information is surfaced on the candidate's application history page.
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{images/pipeline_board.png}
-  \caption{Recruiter Kanban pipeline board showing multi-stage candidate progression and automated ATS screening controls.}
-  \label{fig:pipeline_board}
-\end{figure}
-
 \section{Module 9: Recruiter Dashboard}
 \label{sec:impl-dashboard}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/recruiter dasboard with hiring metrics.png}
+  \caption{Recruiter dashboard displaying real-time hiring funnel metrics, active applicant counts, and application growth analytics.}
+  \label{fig:recruiter_dashboard}
+\end{figure}
 
 \subsection{Purpose}
 
@@ -292,15 +299,15 @@ The dashboard provides recruiters with at-a-glance metrics on their hiring activ
 
 A critical design requirement is that each recruiter sees only metrics related to their own job postings. The dashboard queries are scoped by joining the \texttt{application.applications} table against the \texttt{job.jobs} table where the \texttt{recruiter\_id} matches the authenticated user. This prevents data from other recruiters (even within the same company) from leaking into the dashboard view.
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{images/recruiter_dashboard.png}
-  \caption{Recruiter dashboard displaying real-time hiring funnel metrics, active applicant counts, and application growth analytics.}
-  \label{fig:recruiter_dashboard}
-\end{figure}
-
 \section{Module 10: Offer Letter Generation}
 \label{sec:impl-offer}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/offerletter.png}
+  \caption{Official offer letter generator interface with real-time PDF preview and signature workflow.}
+  \label{fig:offer_letter}
+\end{figure}
 
 \subsection{Purpose}
 
@@ -312,24 +319,17 @@ Offer letters are generated client-side using the jsPDF library combined with ht
 
 When the candidate receives an offer, they see it on their application history page and can accept or decline it. The acceptance status is recorded in the database and reflected on the recruiter's Kanban board.
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{images/offer_letter.png}
-  \caption{Official offer letter generator interface with real-time PDF preview and signature workflow.}
-  \label{fig:offer_letter}
-\end{figure}
-
 \section{Module 11: Responsive Navigation}
 \label{sec:impl-nav}
 
-The platform provides distinct navigation experiences for desktop and mobile viewports. On desktop, a persistent sidebar provides access to all portal sections. On mobile (viewport width below 768 pixels), the sidebar collapses into a hamburger menu that opens a slide-out drawer. Navigation state is managed using React's \texttt{useState} hook, and transitions are animated using CSS transforms for smooth visual feedback.
-
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.50\textwidth]{images/mobile navigation drawer.png}
   \caption{Mobile responsive navigation drawer}
   \label{fig:mobile_drawer}
 \end{figure}
+
+The platform provides distinct navigation experiences for desktop and mobile viewports. On desktop, a persistent sidebar provides access to all portal sections. On mobile (viewport width below 768 pixels), the sidebar collapses into a hamburger menu that opens a slide-out drawer. Navigation state is managed using React's \texttt{useState} hook, and transitions are animated using CSS transforms for smooth visual feedback.
 
 \section{Error Handling and Resilience Patterns}
 \label{sec:impl-errors}
@@ -408,6 +408,4 @@ The administrator dashboard aggregates metrics across all tenants: total registe
 \subsection{Implementation Approach}
 
 Analytics queries use PostgreSQL aggregate functions (\texttt{COUNT}, \texttt{GROUP BY}) with appropriate join conditions to compute metrics efficiently. Queries are executed on demand when the dashboard page loads rather than pre-computed, which simplifies the architecture at the cost of slightly higher query latency. For the current scale of the platform (hundreds of users, thousands of applications), on-demand computation is well within acceptable performance bounds.
-
-
 
