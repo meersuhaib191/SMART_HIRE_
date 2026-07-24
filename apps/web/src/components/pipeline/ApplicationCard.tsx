@@ -3,7 +3,7 @@
 import * as React from "react";
 import {
   ClipboardCheck, Code2, Star, Award, Calendar,
-  Mail, Clock, ChevronRight, Zap
+  Mail, Clock, ChevronRight, Zap, XCircle, RotateCcw
 } from "lucide-react";
 
 export interface CandidateAppCard {
@@ -14,6 +14,7 @@ export interface CandidateAppCard {
   headline?: string;
   job_title: string;
   status: string;
+  rejection_stage?: string | null;
   created_at: string;
   score?: number;
   interview_status?: string;
@@ -34,6 +35,10 @@ export interface CandidateAppCard {
 interface ApplicationCardProps {
   card: CandidateAppCard;
   onClick: (card: CandidateAppCard) => void;
+  onAdvance?: (card: CandidateAppCard) => void;
+  onReject?: (card: CandidateAppCard) => void;
+  onReinstate?: (card: CandidateAppCard) => void;
+  nextStageName?: string;
 }
 
 function MiniScoreBar({ value, max, color }: { value: number; max: number; color: string }) {
@@ -144,20 +149,15 @@ function ScoreBadge({ card }: { card: CandidateAppCard }) {
             <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
               <Star className="h-3 w-3 text-amber-500" /> Interview
             </span>
-            <span className="text-xs font-bold text-zinc-700">{card.interview_avg_score}/5</span>
+            <span className="text-xs font-bold text-zinc-700">{card.interview_avg_score}/10</span>
           </div>
-          <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className={`h-1.5 flex-1 rounded-full ${
-                i <= Math.round(card.interview_avg_score!) ? "bg-amber-400" : "bg-zinc-100"
-              }`} />
-            ))}
+          <div className="flex items-center justify-between pt-1">
+            {rec && (
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${rec.bg} ${rec.color}`}>
+                {rec.label}
+              </span>
+            )}
           </div>
-          {rec && (
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${rec.bg} ${rec.color}`}>
-              {rec.label}
-            </span>
-          )}
         </div>
       );
     }
@@ -179,7 +179,7 @@ function ScoreBadge({ card }: { card: CandidateAppCard }) {
 
     return (
       <div className="flex items-center gap-1.5 text-[10px] font-semibold text-zinc-400 italic">
-        <Clock className="h-3 w-3" /> Awaiting interview scheduling
+        <Clock className="h-3 w-3" /> AI Interview Ready
       </div>
     );
   }
@@ -204,7 +204,10 @@ const AVATAR_COLORS = [
   "from-rose-500 to-pink-600",
 ];
 
-export function ApplicationCard({ card, onClick }: ApplicationCardProps) {
+export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstate, nextStageName }: ApplicationCardProps) {
+  const isRejected = card.status === "rejected" || card.status === "withdrawn";
+  const isOfferStage = ["offer_sent", "offered", "offer_accepted", "joined"].includes(card.status);
+
   const getInitials = (name: string) => {
     const parts = name.trim().split(" ");
     return `${parts[0]?.charAt(0) || ""}${parts[1]?.charAt(0) || ""}`.toUpperCase();
@@ -213,11 +216,6 @@ export function ApplicationCard({ card, onClick }: ApplicationCardProps) {
   const avatarColor = AVATAR_COLORS[
     (card.candidate_name.charCodeAt(0) + (card.candidate_name.charCodeAt(1) || 0)) % AVATAR_COLORS.length
   ];
-
-  const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData("text/plain", card.id);
-    e.dataTransfer.effectAllowed = "move";
-  };
 
   const priorityConfig = {
     high: { label: "High", bg: "bg-red-50", text: "text-red-600", border: "border-red-200", dot: "bg-red-500" },
@@ -231,10 +229,25 @@ export function ApplicationCard({ card, onClick }: ApplicationCardProps) {
   return (
     <div
       draggable
-      onDragStart={handleDragStart}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", card.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onClick={() => onClick(card)}
-      className="group rounded-2xl border border-zinc-200 bg-white p-4 space-y-3.5 cursor-grab active:cursor-grabbing hover:border-blue-200 hover:shadow-[0_4px_20px_0_rgba(0,113,227,0.1)] transition-all duration-150 select-none text-left active:scale-[0.98] active:shadow-sm"
+      className={`group rounded-2xl border p-4 space-y-3 cursor-grab active:cursor-grabbing transition-all duration-150 select-none text-left active:scale-[0.98] ${
+        isRejected
+          ? "border-red-200 bg-red-50/20 hover:border-red-300"
+          : "border-zinc-200 bg-white hover:border-blue-200 hover:shadow-[0_4px_20px_0_rgba(0,113,227,0.1)]"
+      }`}
     >
+      {/* Rejection Badge if rejected */}
+      {isRejected && (
+        <div className="flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-0.5 rounded-full w-fit">
+          <XCircle className="h-3 w-3 text-red-600 shrink-0" />
+          <span>Rejected at this round</span>
+        </div>
+      )}
+
       {/* Avatar + Name + Priority */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
@@ -242,7 +255,9 @@ export function ApplicationCard({ card, onClick }: ApplicationCardProps) {
             {getInitials(card.candidate_name)}
           </div>
           <div className="min-w-0">
-            <h4 className="text-[13px] font-bold text-zinc-900 leading-tight truncate group-hover:text-blue-700 transition-colors">
+            <h4 className={`text-[13px] font-bold leading-tight truncate transition-colors ${
+              isRejected ? "text-zinc-500 line-through" : "text-zinc-900 group-hover:text-blue-700"
+            }`}>
               {card.candidate_name}
             </h4>
             <span className="text-[11px] text-zinc-500 truncate block">
@@ -271,7 +286,7 @@ export function ApplicationCard({ card, onClick }: ApplicationCardProps) {
       </div>
 
       {/* Score/Stage Badge */}
-      <div className="border-t border-zinc-100 pt-2.5">
+      <div className="border-t border-zinc-100 pt-2">
         <ScoreBadge card={card} />
       </div>
 
@@ -289,11 +304,56 @@ export function ApplicationCard({ card, onClick }: ApplicationCardProps) {
         </div>
       )}
 
-      {/* Expand Hint */}
-      <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity pt-1 border-t border-zinc-50">
-        <span className="text-[9px] text-zinc-400 font-semibold flex items-center gap-0.5">
-          View details <ChevronRight className="h-3 w-3" />
-        </span>
+      {/* Footer: Action Buttons */}
+      <div className="flex items-center justify-between pt-2 border-t border-zinc-100 gap-1 flex-wrap">
+        {isRejected ? (
+          onReinstate && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReinstate(card);
+              }}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 transition-colors shadow-2xs cursor-pointer ml-auto"
+              title="Reinstate candidate into active pipeline"
+            >
+              <RotateCcw className="h-3 w-3" />
+              <span>Reinstate</span>
+            </button>
+          )
+        ) : (
+          <>
+            {onReject && !isOfferStage && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReject(card);
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 transition-colors shadow-2xs cursor-pointer"
+                title="Reject candidate at this stage"
+              >
+                <XCircle className="h-3 w-3" />
+                <span>Reject</span>
+              </button>
+            )}
+
+            {onAdvance && nextStageName && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAdvance(card);
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-100 transition-colors shadow-2xs cursor-pointer ml-auto"
+                title={`Advance candidate to ${nextStageName}`}
+              >
+                <span>Advance</span>
+                <ChevronRight className="h-3 w-3" />
+              </button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

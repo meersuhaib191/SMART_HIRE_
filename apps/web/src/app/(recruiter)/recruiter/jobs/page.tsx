@@ -58,39 +58,73 @@ export default function JobsPage() {
   // Bulk dialog state
   const [bulkActionType, setBulkActionType] = React.useState<"publish" | "archive" | "delete" | null>(null);
 
-  // Fetch Jobs List
+  // Fetch Jobs List scoped to recruiter's company
   const fetchJobs = React.useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (status) params.append("status", status);
-      if (location) params.append("location", location);
-      if (type) params.append("type", type);
+      const { data: { user } } = await supabase.auth.getUser();
+      let userCompanyId: string | null = null;
 
-      const res = await fetch(`/api/jobs?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to fetch jobs");
-      const { data } = await res.json();
+      if (user) {
+        const { data: recruiter } = await supabase
+          .schema("organization")
+          .from("recruiters")
+          .select("company_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (recruiter?.company_id) {
+          userCompanyId = recruiter.company_id;
+        }
+      }
+
+      let query = supabase
+        .schema("job")
+        .from("jobs")
+        .select("*")
+        .is("deleted_at", null);
+
+      if (userCompanyId) {
+        query = query.eq("company_id", userCompanyId);
+      }
+      if (status) {
+        query = query.eq("status", status);
+      }
+      if (location) {
+        query = query.ilike("location", `%${location}%`);
+      }
+      if (type) {
+        query = query.eq("type", type);
+      }
+
+      const { data } = await query.order("created_at", { ascending: false });
 
       // Apply client-side search text filtering
       let filtered = data || [];
       if (search) {
-        const query = search.toLowerCase();
+        const queryStr = search.toLowerCase();
         filtered = filtered.filter(
           (j: JobItem) =>
-            j.title.toLowerCase().includes(query) ||
-            (j.category && j.category.toLowerCase().includes(query))
+            j.title.toLowerCase().includes(queryStr) ||
+            (j.category && j.category.toLowerCase().includes(queryStr))
         );
       }
 
       setJobs(filtered);
 
-      // Fetch dynamic total applications count
-      const { count } = await supabase
-        .schema("application")
-        .from("applications")
-        .select("*", { count: "exact", head: true })
-        .is("deleted_at", null);
-      setTotalApps(count || 0);
+      // Fetch dynamic total applications count for recruiter's company jobs
+      if (filtered.length > 0) {
+        const jobIds = filtered.map((j: JobItem) => j.id);
+        const { count } = await supabase
+          .schema("application")
+          .from("applications")
+          .select("id", { count: "exact", head: true })
+          .in("job_id", jobIds)
+          .is("deleted_at", null);
+        setTotalApps(count || 0);
+      } else {
+        setTotalApps(0);
+      }
     } catch (err) {
       logger.error("Failed to load jobs", err);
     } finally {
@@ -239,8 +273,29 @@ export default function JobsPage() {
         <JobAnalyticsCard title="Total Applications" value={totalApps} icon={<BarChart className="h-4.5 w-4.5 text-[#FF9F0A]" />} description="Across all listed positions" />
       </div>
 
+      {/* Domain Category Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        {["All Domains", "Technology", "Finance", "Marketing", "Human Resources", "Design & Creative", "Legal", "Operations", "Healthcare"].map((domain) => {
+          const catKey = domain === "All Domains" ? "" : domain.toLowerCase();
+          const isSel = (search.toLowerCase() === catKey) || (domain === "All Domains" && !search);
+          return (
+            <button
+              key={domain}
+              onClick={() => setSearch(domain === "All Domains" ? "" : domain)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                isSel
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "bg-white border border-zinc-200 text-zinc-600 hover:bg-zinc-100"
+              }`}
+            >
+              {domain}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Search and Filters Drawer */}
-      <div className="pt-2">
+      <div className="pt-1">
         <JobFilters
           searchValue={search}
           statusValue={status}

@@ -46,12 +46,10 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST: Create a new job posting
- * NOTE: Uses createClient() (default schema) for auth — custom-schema clients
- * cannot resolve auth.getUser() correctly.
+ * Enforces status: "draft" so all new job postings land in draft mode first.
  */
 export async function POST(request: NextRequest) {
   try {
-    // Auth must use the default-schema client; custom-schema clients bypass auth
     const authClient = await createClient();
     const {
       data: { user },
@@ -64,9 +62,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    logger.info(`API: Recruiter ${user.id} is creating a job posting`);
+    logger.info(`API: Recruiter ${user.id} is creating a job posting (saving to Draft)`);
 
-    const jobRecord = await jobService.createJob(body);
+    // Enforce initial draft status for all newly posted jobs
+    const draftPayload = {
+      ...body,
+      status: "draft",
+    };
+
+    const jobRecord = await jobService.createJob(draftPayload);
     return NextResponse.json({ data: jobRecord }, { status: 201 });
   } catch (err: unknown) {
     logger.error("API error in jobs creation POST route", err);

@@ -1,0 +1,62 @@
+\setcounter{chapter}{1}
+\chapter{Literature Survey}
+\label{ch:litsurvey}
+
+\section{Overview}
+\label{sec:lit-intro}
+
+This chapter surveys academic literature and enterprise platforms across four domain areas: applicant tracking pipelines, resume parsing systems, technical assessment platforms, and AI video interview evaluators.
+
+\section{Review of Commercial Systems}
+\label{sec:ats-review}
+
+Commercial ATS platforms such as Greenhouse~\cite{greenhouse2024}, Lever~\cite{lever2024}, and Workday~\cite{workday2024} provide structured hiring pipelines and collaborative scoring. However, these systems operate purely as workflow tools and do not natively evaluate technical candidate skills. External coding platforms (HackerRank, Codility) and video tools (HireVue) require custom API integrations, introducing data synchronization overhead and increasing recruiter workload by 20--30\%~\cite{nguyen2021}.
+
+\section{Resume Parsing and Vector Similarity Scoring}
+\label{sec:resume-review}
+
+Early resume parsers relied on regular expressions and rule-based templates, which struggled with non-standard formatting~\cite{yu2005}. Machine learning models introduced named entity recognition (NER) for skill extraction~\cite{jiechieu2021}. Modern systems vectorise resumes and job descriptions into high-dimensional embedding spaces, computing match relevance via cosine similarity:
+\begin{equation}
+\label{eq:cosine}
+\text{sim}(\vec{r}, \vec{j}) = \frac{\vec{r} \cdot \vec{j}}{\|\vec{r}\| \cdot \|\vec{j}\|}
+\end{equation}
+SmartHire builds on this by leveraging Google's Gemini API to calculate multi-dimensional relevance scores (0--10 scale).
+
+\section{Technical Assessments and AI Interviewing}
+\label{sec:assessment-review}
+
+Coding assessment platforms like HackerRank~\cite{hackerrank2024} and Codility~\cite{codility2024} provide sandboxed code execution but operate in isolation from ATS candidate boards. In video interviewing, HireVue pioneered AI-assisted candidate evaluation~\cite{hirevue2024}. Academic studies demonstrate that multimodal LLMs effectively evaluate candidate response depth and technical clarity as decision-support tools~\cite{chen2022, naim2018}.
+
+\section{Multi-Tenant Database Architectures}
+\label{sec:multitenancy-review}
+
+Multi-tenant SaaS platforms enforce data isolation through separate databases, shared database with separate schemas, or shared schemas with tenant IDs~\cite{chong2006}. SmartHire adopts domain-specific schemas (\texttt{organization}, \texttt{job}, \texttt{candidate}, \texttt{application}, \texttt{assessment}, \texttt{interview}) with PostgreSQL Row-Level Security (RLS) for complete multi-tenant isolation~\cite{supabase2024}.
+
+\section{Comparative Analysis}
+\label{sec:comparison}
+
+\begin{table}[htbp]
+\centering
+\caption{Feature comparison of existing systems vs. SmartHire}
+\label{tab:comparison}
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Capability} & \textbf{Greenhouse} & \textbf{HackerRank} & \textbf{HireVue} & \textbf{TestGorilla} & \textbf{SmartHire} \\
+\midrule
+ATS Pipeline Tracking          & \checkmark & ---        & ---        & ---        & \checkmark \\
+Automated Resume Scoring       & Partial    & ---        & ---        & ---        & \checkmark \\
+Timed MCQ Assessments          & ---        & \checkmark & ---        & \checkmark & \checkmark \\
+Browser Code Execution IDE     & ---        & \checkmark & ---        & ---        & \checkmark \\
+AI Video Interview Auditing    & ---        & ---        & \checkmark & ---        & \checkmark \\
+Stage Rejection Feedback       & Partial    & ---        & ---        & ---        & \checkmark \\
+Automated PDF Offer Generator   & \checkmark & ---        & ---        & ---        & \checkmark \\
+Unified Single-Platform SaaS   & ---        & ---        & ---        & ---        & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Research Gap Identification}
+\label{sec:research-gap}
+
+Existing platforms leave three principal gaps: (1) Fragmented toolchains requiring manual score transfers across vendor portals; (2) Lack of transparent rejection feedback informing candidates of their specific disqualification stage; and (3) High subscription cost for licensing multiple standalone tools. SmartHire fills these gaps within a single SaaS ecosystem.

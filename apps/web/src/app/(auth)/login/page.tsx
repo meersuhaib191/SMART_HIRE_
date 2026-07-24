@@ -2,13 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { Mail } from "lucide-react";
 import { AuthCard, FormField, PasswordInput, OAuthButton, SubmitButton } from "@/components/auth";
 import { authService } from "@/services/auth";
 import { logger } from "@smarthire/logger";
+import { useSearchParams } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -18,14 +20,16 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-export default function LoginPage() {
-  const router = useRouter();
+function LoginFormContent() {
   const [loading, setLoading] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams?.get("redirectTo");
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -36,22 +40,64 @@ export default function LoginPage() {
     },
   });
 
+  React.useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem("smarthire_remembered_email");
+      const isRemembered = localStorage.getItem("smarthire_remember_me") === "true";
+      if (savedEmail && isRemembered) {
+        setValue("email", savedEmail);
+        setValue("rememberMe", true);
+      }
+    } catch {
+      // Ignore SSR/storage error
+    }
+  }, [setValue]);
+
   const onSubmit = async (values: LoginFormValues) => {
     logger.info(`[LoginPage] Submit credentials for: ${values.email}`);
     setLoading(true);
     setErrorMsg(null);
 
     try {
-      const response = await authService.signIn(values.email, values.password);
-      const user = response?.user;
+      if (values.rememberMe) {
+        localStorage.setItem("smarthire_remembered_email", values.email);
+        localStorage.setItem("smarthire_remember_me", "true");
+      } else {
+        localStorage.removeItem("smarthire_remembered_email");
+        localStorage.removeItem("smarthire_remember_me");
+      }
+
+      // 1. Sign in with browser client to set document.cookie synchronously
+      const supabase = createClient();
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
+      });
+
+      if (signInError) {
+        throw new Error(signInError.message || "Invalid credentials. Please try again.");
+      }
+
+      // 2. Sync server route handler
+      await authService.signIn(values.email, values.password).catch(() => {});
+
+      const user = signInData?.user;
       logger.info("[LoginPage] Sign in successful", user?.id);
       
       const role = user?.user_metadata?.role || "candidate";
-      let redirectPath = "/candidate/dashboard";
-      if (role === "platform-admin") {
-        redirectPath = "/admin/system";
-      } else if (role === "recruiter" || role === "company-admin") {
-        redirectPath = "/recruiter/jobs";
+      let redirectPath = redirectTo || "/candidate/dashboard";
+      if (!redirectTo) {
+        if (role === "platform-admin") {
+          redirectPath = "/admin/system";
+        } else if (role === "recruiter" || role === "company-admin") {
+          const savedProfileKey = `smarthire_active_recruiter_profile_${user?.id}`;
+          const savedProfile = localStorage.getItem(savedProfileKey) || localStorage.getItem("smarthire_active_recruiter_profile");
+          if (!savedProfile) {
+            redirectPath = "/recruiter/profile";
+          } else {
+            redirectPath = "/recruiter/jobs";
+          }
+        }
       }
       
       window.location.href = redirectPath;
@@ -66,7 +112,6 @@ export default function LoginPage() {
 
   const handleSocialLogin = (provider: "google" | "microsoft") => {
     logger.info(`[LoginPage] Trigger social SSO for: ${provider}`);
-    // SSO Redirects can be added here
   };
 
   return (
@@ -75,7 +120,7 @@ export default function LoginPage() {
       subtitle={
         <span>
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-semibold text-blue-500 hover:text-blue-450 hover:underline">
+          <Link href="/register" className="font-bold text-blue-600 hover:text-blue-700 hover:underline transition-colors">
             Sign up
           </Link>
         </span>
@@ -83,7 +128,7 @@ export default function LoginPage() {
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {errorMsg && (
-          <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs font-medium text-red-500 animate-in fade-in zoom-in-95">
+          <div className="rounded-xl bg-red-50 border border-red-200 p-3.5 text-xs font-semibold text-red-600 animate-in fade-in zoom-in-95">
             {errorMsg}
           </div>
         )}
@@ -92,13 +137,14 @@ export default function LoginPage() {
           label="Email Address"
           id="email"
           type="email"
+          icon={Mail}
           placeholder="name@company.com"
           error={errors.email?.message}
           disabled={loading}
           {...register("email")}
         />
 
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <PasswordInput
             label="Password"
             id="password"
@@ -108,18 +154,18 @@ export default function LoginPage() {
             {...register("password")}
           />
           <div className="flex items-center justify-between pt-1">
-            <label className="flex items-center gap-2 text-xs text-zinc-500 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs font-medium text-zinc-600 cursor-pointer select-none">
               <input
                 type="checkbox"
                 disabled={loading}
-                className="rounded border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-blue-600 focus:ring-blue-500"
+                className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                 {...register("rememberMe")}
               />
               <span>Remember me</span>
             </label>
             <Link
               href="/forgot-password"
-              className="text-xs font-semibold text-blue-500 hover:text-blue-450 hover:underline"
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors"
             >
               Forgot password?
             </Link>
@@ -129,9 +175,9 @@ export default function LoginPage() {
         <SubmitButton loading={loading}>Sign In</SubmitButton>
 
         {/* Separator */}
-        <div className="relative flex items-center justify-center my-6">
-          <div className="absolute inset-x-0 h-px bg-zinc-200 dark:bg-zinc-800/80" />
-          <span className="relative px-3 text-xs text-zinc-500 bg-white dark:bg-[#09090c] font-semibold uppercase tracking-wider">
+        <div className="relative flex items-center justify-center my-4">
+          <div className="absolute inset-x-0 h-px bg-zinc-200" />
+          <span className="relative px-3 text-[10px] text-zinc-500 bg-white font-bold uppercase tracking-wider">
             Or continue with
           </span>
         </div>
@@ -142,5 +188,13 @@ export default function LoginPage() {
         </div>
       </form>
     </AuthCard>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center text-sm font-semibold text-zinc-600">Loading sign in...</div>}>
+      <LoginFormContent />
+    </React.Suspense>
   );
 }

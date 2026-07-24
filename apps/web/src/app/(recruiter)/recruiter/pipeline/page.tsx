@@ -4,8 +4,7 @@ import * as React from "react";
 import { ApplicationCard, CandidateDrawer, PipelineFilters, MetricsBar, CandidateAppCard } from "@/components/pipeline";
 import { logger } from "@smarthire/logger";
 import { SkeletonMetric, SkeletonCard } from "@/components/shared/Skeleton";
-import { CheckCircle2, XCircle, Archive, ChevronRight, Loader2, Briefcase, Sparkles, Video, UserCheck, Calendar, Clock, Link as LinkIcon } from "lucide-react";
-import { Button } from "@smarthire/ui";
+import { CheckCircle2, ChevronRight, Loader2, Briefcase, Video, UserCheck, Calendar, Clock, UploadCloud, FileText, X, FileCheck, Sparkles } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
@@ -14,13 +13,113 @@ const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 // Supabase client
 const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
-const columns = [
-  { key: "applied", name: "Applied" },
-  { key: "screening", name: "Profile Screening" },
-  { key: "mcq", name: "MCQ Test" },
-  { key: "coding", name: "Coding Round" },
-  { key: "interview", name: "Interview" },
+const techColumns = [
+  { key: "applied", name: "1. Applied" },
+  { key: "screening", name: "2. ATS Screened" },
+  { key: "mcq", name: "3. MCQ Exam" },
+  { key: "coding", name: "4. IDE Coding Round" },
+  { key: "interview", name: "5. AI Interview" },
+  { key: "zoom_interview", name: "6. Recruiter Google Meet" },
+  { key: "offer_sent", name: "7. Offer Sent & Joined" },
 ];
+
+const nonTechColumns = [
+  { key: "applied", name: "1. Applied" },
+  { key: "screening", name: "2. ATS Screened" },
+  { key: "mcq", name: "3. MCQ Exam" },
+  { key: "interview", name: "4. AI Interview" },
+  { key: "zoom_interview", name: "5. Recruiter Google Meet" },
+  { key: "offer_sent", name: "6. Offer Sent & Joined" },
+];
+
+function PdfUploader({
+  label,
+  description,
+  file,
+  onFileChange,
+  required = false,
+}: {
+  label: string;
+  description: string;
+  file: File | null;
+  onFileChange: (file: File | null) => void;
+  required?: boolean;
+}) {
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  return (
+    <div className="space-y-1.5 text-left">
+      <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider block">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-3 transition-all">
+        {file ? (
+          <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-lg border border-blue-200 text-xs shadow-sm">
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 font-bold border border-blue-100">
+                <FileText className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-zinc-900 truncate">{file.name}</span>
+                  <FileCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                </div>
+                <span className="text-[10px] text-zinc-500 font-medium block">{(file.size / 1024).toFixed(1)} KB • PDF Template Ready</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onFileChange(null)}
+              className="text-zinc-400 hover:text-red-500 text-xs font-bold px-2 py-1 rounded hover:bg-zinc-100 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 hover:border-blue-500 hover:bg-blue-50/20 rounded-xl p-4 cursor-pointer transition-all text-center group"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={(e) => {
+                const selected = e.target.files?.[0];
+                if (selected) onFileChange(selected);
+              }}
+            />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-zinc-200 text-zinc-500 group-hover:text-blue-600 group-hover:border-blue-200 transition-all mb-2">
+              <UploadCloud className="h-5 w-5" />
+            </div>
+            <span className="text-xs font-bold text-zinc-800 group-hover:text-blue-600 transition-colors">
+              Click or drag PDF template here
+            </span>
+            <span className="text-[10px] text-zinc-500 mt-0.5">{description}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatErrorMessage(errData: unknown, fallback: string): string {
+  if (!errData) return fallback;
+  if (typeof errData === "string") return errData;
+  if (typeof errData === "object" && errData !== null) {
+    const obj = errData as Record<string, unknown>;
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.error === "string") return obj.error;
+    if (typeof obj.error === "object" && obj.error !== null) {
+      const sub = obj.error as Record<string, unknown>;
+      if (typeof sub.message === "string") return sub.message;
+      return JSON.stringify(sub);
+    }
+    return JSON.stringify(obj);
+  }
+  return String(errData);
+}
 
 export default function PipelinePage() {
   const [cards, setCards] = React.useState<CandidateAppCard[]>([]);
@@ -32,33 +131,46 @@ export default function PipelinePage() {
 
   // Drawer detail state
   const [activeCard, setActiveCard] = React.useState<CandidateAppCard | null>(null);
-  const [activeBinKey, setActiveBinKey] = React.useState<string | null>(null);
   const [screeningLoading, setScreeningLoading] = React.useState(false);
   const [topNLimit, setTopNLimit] = React.useState(30);
 
-  // MCQ & Coding scheduling state
+  // MCQ scheduling state
+  // Active job and company profile state
   const [activeJobDetails, setActiveJobDetails] = React.useState<{
     id: string;
     title: string;
+    company_id?: string | null;
+    location?: string | null;
+    category?: string | null;
+    salary_min?: number | null;
+    salary_max?: number | null;
     mcq_assessment_id: string | null;
     mcq_scheduled_start_at: string | null;
     coding_assessment_id?: string | null;
     coding_scheduled_start_at?: string | null;
   } | null>(null);
-  const [assessmentTemplates, setAssessmentTemplates] = React.useState<{ id: string; title: string }[]>([]);
+
+  const [companyDetails, setCompanyDetails] = React.useState<{
+    id: string;
+    name: string;
+    industry?: string | null;
+  } | null>(null);
+
+  // MCQ scheduling state
   const [mcqModalOpen, setMcqModalOpen] = React.useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = React.useState("");
   const [mcqScheduleTime, setMcqScheduleTime] = React.useState("");
+  const [mcqPdfFile, setMcqPdfFile] = React.useState<File | null>(null);
   const [mcqSubmitting, setMcqSubmitting] = React.useState(false);
 
   // Coding scheduling state
   const [codingModalOpen, setCodingModalOpen] = React.useState(false);
-  const [selectedCodingTemplateId, setSelectedCodingTemplateId] = React.useState("");
   const [codingScheduleTime, setCodingScheduleTime] = React.useState("");
+  const [codingPdfFile, setCodingPdfFile] = React.useState<File | null>(null);
   const [codingSubmitting, setCodingSubmitting] = React.useState(false);
 
   // Interview scheduling state
   const [interviewModalOpen, setInterviewModalOpen] = React.useState(false);
+  const [selectedInterviewType, setSelectedInterviewType] = React.useState<"ai_interview" | "zoom_interview">("ai_interview");
   const [interviewCard, setInterviewCard] = React.useState<CandidateAppCard | null>(null);
   const [interviewDateTime, setInterviewDateTime] = React.useState("");
   const [interviewDuration, setInterviewDuration] = React.useState("60");
@@ -66,7 +178,38 @@ export default function PipelinePage() {
   const [interviewerEmail, setInterviewerEmail] = React.useState("");
   const [meetingLink, setMeetingLink] = React.useState("");
   const [interviewNotes, setInterviewNotes] = React.useState("");
+  const [interviewPdfFile, setInterviewPdfFile] = React.useState<File | null>(null);
   const [interviewSubmitting, setInterviewSubmitting] = React.useState(false);
+
+  // Offer Letter Generation State
+  const [offerModalCard, setOfferModalCard] = React.useState<CandidateAppCard | null>(null);
+  const [offerCompanyName, setOfferCompanyName] = React.useState("Waadi Media");
+  const [offerCompanyDivision, setOfferCompanyDivision] = React.useState("Corporate HR & Talent Acquisition Division");
+  const [offerSalary, setOfferSalary] = React.useState("$120,000 / annum");
+  const [offerJoiningDate, setOfferJoiningDate] = React.useState(new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10));
+  const [offerLocation, setOfferLocation] = React.useState("San Francisco, CA / Remote");
+  const [offerSending, setOfferSending] = React.useState(false);
+
+  const openOfferModalFor = React.useCallback(
+    (card: CandidateAppCard) => {
+      setOfferModalCard(card);
+      if (companyDetails?.name) {
+        setOfferCompanyName(companyDetails.name);
+      }
+      if (activeJobDetails?.category || companyDetails?.industry) {
+        setOfferCompanyDivision(`${activeJobDetails?.category || companyDetails?.industry} Division`);
+      }
+      if (activeJobDetails?.location) {
+        setOfferLocation(activeJobDetails.location);
+      }
+      if (activeJobDetails?.salary_min && activeJobDetails?.salary_max) {
+        setOfferSalary(`$${Number(activeJobDetails.salary_min).toLocaleString()} - $${Number(activeJobDetails.salary_max).toLocaleString()} / annum`);
+      } else if (activeJobDetails?.salary_min) {
+        setOfferSalary(`$${Number(activeJobDetails.salary_min).toLocaleString()} / annum`);
+      }
+    },
+    [companyDetails, activeJobDetails]
+  );
 
   const getDefaultDatetimeLocal = React.useCallback(() => {
     const tomorrow = new Date();
@@ -75,6 +218,57 @@ export default function PipelinePage() {
     const tzOffset = tomorrow.getTimezoneOffset() * 60000;
     return new Date(tomorrow.getTime() - tzOffset).toISOString().slice(0, 16);
   }, []);
+
+  const handleRejectCandidate = React.useCallback(
+    async (card: CandidateAppCard, currentStageKey: string) => {
+      if (!confirm(`Reject candidate ${card.candidate_name} at ${currentStageKey.toUpperCase()} round?`)) {
+        return;
+      }
+      const previousCards = [...cards];
+      setCards((prev) =>
+        prev.map((c) =>
+          c.id === card.id ? { ...c, status: "rejected", rejection_stage: currentStageKey } : c
+        )
+      );
+      try {
+        const res = await fetch(`/api/applications/${card.id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "rejected", rejection_stage: currentStageKey }),
+        });
+        if (!res.ok) throw new Error("Failed to update rejection status");
+        logger.info(`[PipelinePage] Application ${card.id} rejected at stage ${currentStageKey}`);
+      } catch (err) {
+        logger.error("Failed to reject candidate, rolling back UI", err);
+        setCards(previousCards);
+      }
+    },
+    [cards]
+  );
+
+  const handleReinstateCandidate = React.useCallback(
+    async (card: CandidateAppCard, stageKey: string) => {
+      const previousCards = [...cards];
+      setCards((prev) =>
+        prev.map((c) =>
+          c.id === card.id ? { ...c, status: stageKey, rejection_stage: null } : c
+        )
+      );
+      try {
+        const res = await fetch(`/api/applications/${card.id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: stageKey, rejection_stage: null }),
+        });
+        if (!res.ok) throw new Error("Failed to reinstate candidate");
+        logger.info(`[PipelinePage] Application ${card.id} reinstated to stage ${stageKey}`);
+      } catch (err) {
+        logger.error("Failed to reinstate candidate, rolling back UI", err);
+        setCards(previousCards);
+      }
+    },
+    [cards]
+  );
 
   const fetchPipelineData = React.useCallback(async () => {
     if (!selectedJobId) {
@@ -85,26 +279,28 @@ export default function PipelinePage() {
     }
     setLoading(true);
     try {
-      // Fetch active job details
+      // Fetch active job details and company profile
       const { data: jobData } = await supabase
         .schema("job")
         .from("jobs")
-        .select("id, title, mcq_assessment_id, mcq_scheduled_start_at, coding_assessment_id, coding_scheduled_start_at")
+        .select("id, title, company_id, location, category, salary_min, salary_max, mcq_assessment_id, mcq_scheduled_start_at, coding_assessment_id, coding_scheduled_start_at")
         .eq("id", selectedJobId)
         .single();
       
       if (jobData) {
         setActiveJobDetails(jobData);
-      }
+        if (jobData.company_id) {
+          const { data: compData } = await supabase
+            .schema("organization")
+            .from("companies")
+            .select("id, name, industry")
+            .eq("id", jobData.company_id)
+            .maybeSingle();
 
-      // Fetch assessment templates
-      const { data: templates } = await supabase
-        .schema("assessment")
-        .from("assessments")
-        .select("id, title");
-      
-      if (templates) {
-        setAssessmentTemplates(templates);
+          if (compData) {
+            setCompanyDetails(compData);
+          }
+        }
       }
 
       // 1. Fetch all active applications from application schema
@@ -112,14 +308,15 @@ export default function PipelinePage() {
       params.append("jobId", selectedJobId);
 
       const appRes = await fetch(`/api/applications?${params.toString()}`);
-      if (!appRes.ok) throw new Error("Failed to fetch applications");
-      const { data: appsList } = await appRes.json();
+      const resJson = await appRes.json().catch(() => ({}));
+      const appsList = resJson.data || [];
 
       interface AppItem {
         id: string;
         candidate_id: string;
         job_id: string;
         status: string;
+        rejection_stage?: string | null;
         created_at: string;
         score?: number | null;
         screening_score?: number | null;
@@ -169,6 +366,7 @@ export default function PipelinePage() {
             headline: cand?.headline || "Applicant",
             job_title: job ? job.title : "Position",
             status: app.status,
+            rejection_stage: app.rejection_stage,
             created_at: app.created_at,
             score: app.score ? Number(app.score) : undefined,
             tags: cand?.tags || [],
@@ -215,12 +413,38 @@ export default function PipelinePage() {
     }
   }, [selectedJobId, search, tag]);
 
-  // Load jobs list options & pipeline data
+  // Load jobs list options for the logged-in recruiter's company
   React.useEffect(() => {
     const loadJobsList = async () => {
       try {
-        const { data } = await supabase.schema("job").from("jobs").select("id, title").is("deleted_at", null);
+        const { data: { user } } = await supabase.auth.getUser();
+        let query = supabase
+          .schema("job")
+          .from("jobs")
+          .select("id, title, created_at, company_id")
+          .is("deleted_at", null);
+
+        if (user) {
+          const { data: recruiter } = await supabase
+            .schema("organization")
+            .from("recruiters")
+            .select("company_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (recruiter?.company_id) {
+            query = query.eq("company_id", recruiter.company_id);
+          }
+        }
+
+        const { data } = await query.order("created_at", { ascending: false });
+
         setJobs(data || []);
+        if (data && data.length > 0) {
+          setSelectedJobId((prev) => prev || data[0].id);
+        } else {
+          setSelectedJobId("");
+        }
       } catch (err) {
         logger.error("Failed to fetch jobs options", err);
       }
@@ -231,6 +455,18 @@ export default function PipelinePage() {
   React.useEffect(() => {
     fetchPipelineData();
   }, [fetchPipelineData]);
+
+  const getCanonicalStageKey = (status: string): string => {
+    const s = (status || "").toLowerCase().trim();
+    if (s === "applied") return "applied";
+    if (s === "screening" || s === "ats_screened") return "screening";
+    if (s === "mcq" || s === "mcq_exam") return "mcq";
+    if (s === "coding" || s === "ide_coding") return "coding";
+    if (s === "interview" || s === "ai_interview" || s === "ai_room") return "interview";
+    if (s === "zoom_interview" || s === "recruiter_review" || s === "interview_scheduled" || s === "final_interview") return "zoom_interview";
+    if (s === "offer_sent" || s === "offered" || s === "offer_accepted" || s === "joined") return "offer_sent";
+    return s;
+  };
 
   // Drag & Drop event handlers
   const handleDragOver = (e: React.DragEvent) => {
@@ -244,6 +480,53 @@ export default function PipelinePage() {
 
     const draggedCard = cards.find((c) => c.id === appId);
     if (!draggedCard || draggedCard.status === targetStatus) return;
+
+    // Strict Sequential Pipeline Stages Guard
+    const isTechJob = !activeJobDetails ||
+      activeJobDetails.title?.toLowerCase().includes("engineer") ||
+      activeJobDetails.title?.toLowerCase().includes("developer") ||
+      activeJobDetails.title?.toLowerCase().includes("tech") ||
+      activeJobDetails.title?.toLowerCase().includes("full stack") ||
+      activeJobDetails.title?.toLowerCase().includes("software");
+
+    const activeColumns = isTechJob ? techColumns : nonTechColumns;
+    const activeKeys = activeColumns.map((c) => c.key);
+
+    const currentIdx = activeKeys.indexOf(getCanonicalStageKey(draggedCard.status));
+    const targetIdx = activeKeys.indexOf(getCanonicalStageKey(targetStatus));
+
+    // Prevent non-sequential skipping or jumping rounds to eliminate recruiter bias
+    if (currentIdx !== -1 && targetIdx !== -1 && targetIdx > currentIdx + 1) {
+      alert(
+        `⚠️ Objective Pipeline Guard & Bias Prevention\n\n` +
+        `Candidates must advance sequentially through each evaluation round.\n` +
+        `Skipping rounds (e.g. jumping directly from '${draggedCard.status}' to '${targetStatus}') is prohibited.\n\n` +
+        `Please move candidates step-by-step or click the 'Advance' button on the candidate card.`
+      );
+      return;
+    }
+
+    // Trigger Custom Editable Offer Letter Modal if target is offer_sent / offered
+    if (targetStatus === "offer_sent" || targetStatus === "offered") {
+      openOfferModalFor(draggedCard);
+      return;
+    }
+
+    // Trigger Google Meet Scheduling Modal ONLY if target is zoom_interview
+    if (targetStatus === "zoom_interview") {
+      setInterviewCard(draggedCard);
+      setInterviewDateTime(
+        draggedCard.interview_scheduled_at
+          ? new Date(new Date(draggedCard.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+          : getDefaultDatetimeLocal()
+      );
+      if (!meetingLink) {
+        const code = `smh-${Math.random().toString(36).slice(2, 5)}-${Math.random().toString(36).slice(2, 6)}`;
+        setMeetingLink(`https://meet.google.com/${code}`);
+      }
+      setInterviewModalOpen(true);
+      return;
+    }
 
     // Save previous state for rollback on error
     const previousCards = [...cards];
@@ -261,28 +544,101 @@ export default function PipelinePage() {
         body: JSON.stringify({ status: targetStatus }),
       });
 
-      if (!res.ok) throw new Error("Status transition API rejected drop");
-      logger.info(`[PipelinePage] Application ${appId} dragged to stage: ${targetStatus}`);
-
-      // Auto-open interview scheduling modal if dropped in interview column
-      if (targetStatus === "interview") {
-        setInterviewCard(draggedCard);
-        setInterviewDateTime(draggedCard.interview_scheduled_at ? new Date(new Date(draggedCard.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : getDefaultDatetimeLocal());
-        setInterviewModalOpen(true);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        const msg = formatErrorMessage(errJson, `Status transition API rejected drop with HTTP ${res.status}`);
+        logger.error(`[PipelinePage] Status transition rejected: ${msg}`);
+        alert(`⚠️ Pipeline Transition Alert: ${msg}`);
+        setCards(previousCards);
+        return;
       }
-    } catch (err) {
+      logger.info(`[PipelinePage] Application ${appId} dragged to stage: ${targetStatus}`);
+      await fetchPipelineData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : formatErrorMessage(err, "Drag and drop transition failed");
       logger.error("Drag and drop transition failed, rolling back UI", err);
-      // Rollback UI
+      alert(`⚠️ Pipeline Transition Alert: ${msg}`);
+      setCards(previousCards);
+    }
+  };
+
+  const handleAdvanceSingleCandidate = async (card: CandidateAppCard) => {
+    const isTechJob = !activeJobDetails ||
+      activeJobDetails.title?.toLowerCase().includes("engineer") ||
+      activeJobDetails.title?.toLowerCase().includes("developer") ||
+      activeJobDetails.title?.toLowerCase().includes("tech") ||
+      activeJobDetails.title?.toLowerCase().includes("full stack") ||
+      activeJobDetails.title?.toLowerCase().includes("software");
+
+    const activeCols = isTechJob ? techColumns : nonTechColumns;
+    const activeKeys = activeCols.map((c) => c.key);
+    const canonicalStatus = getCanonicalStageKey(card.status);
+    const currentIdx = activeKeys.indexOf(canonicalStatus);
+
+    if (currentIdx === -1 || currentIdx >= activeKeys.length - 1) return;
+    const nextKey = activeKeys[currentIdx + 1];
+
+    if (nextKey === "offer_sent" || nextKey === "offered") {
+      openOfferModalFor(card);
+      return;
+    }
+
+    if (nextKey === "zoom_interview") {
+      setInterviewCard(card);
+      setInterviewDateTime(
+        card.interview_scheduled_at
+          ? new Date(new Date(card.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+          : getDefaultDatetimeLocal()
+      );
+      if (!meetingLink) {
+        const code = `smh-${Math.random().toString(36).slice(2, 5)}-${Math.random().toString(36).slice(2, 6)}`;
+        setMeetingLink(`https://meet.google.com/${code}`);
+      }
+      setInterviewModalOpen(true);
+      return;
+    }
+
+    const previousCards = [...cards];
+    setCards((prev) => prev.map((c) => (c.id === card.id ? { ...c, status: nextKey } : c)));
+
+    try {
+      const res = await fetch(`/api/applications/${card.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextKey }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        const msg = formatErrorMessage(errJson, `Status update rejected with HTTP ${res.status}`);
+        logger.error(`[PipelinePage] Status update rejected: ${msg}`);
+        alert(`⚠️ Pipeline Transition Alert: ${msg}`);
+        setCards(previousCards);
+        return;
+      }
+      logger.info(`[PipelinePage] Application ${card.id} advanced to stage: ${nextKey}`);
+      await fetchPipelineData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : formatErrorMessage(err, "Failed to advance candidate status");
+      logger.error("Failed to advance candidate status", err);
+      alert(`⚠️ Stage Transition Alert: ${msg}`);
       setCards(previousCards);
     }
   };
 
   const handleAdvanceAll = async (currentStatus: string) => {
-    const statusSequence = ["applied", "screening", "mcq", "coding", "interview", "offered"];
-    const currentIndex = statusSequence.indexOf(currentStatus);
-    if (currentIndex === -1 || currentIndex === statusSequence.length - 1) return;
+    const isTechJob = !activeJobDetails ||
+      activeJobDetails.title?.toLowerCase().includes("engineer") ||
+      activeJobDetails.title?.toLowerCase().includes("developer") ||
+      activeJobDetails.title?.toLowerCase().includes("tech") ||
+      activeJobDetails.title?.toLowerCase().includes("full stack") ||
+      activeJobDetails.title?.toLowerCase().includes("software");
 
-    const nextStatus = statusSequence[currentIndex + 1];
+    const activeCols = isTechJob ? techColumns : nonTechColumns;
+    const activeKeys = activeCols.map((c) => c.key);
+    const currentIndex = activeKeys.indexOf(currentStatus);
+    if (currentIndex === -1 || currentIndex >= activeKeys.length - 1) return;
+
+    const nextStatus = activeKeys[currentIndex + 1];
     const targetCards = cards.filter((c) => c.status === currentStatus);
     if (targetCards.length === 0) return;
 
@@ -312,6 +668,72 @@ export default function PipelinePage() {
     }
   };
 
+  const handleAdvanceTopN = async (fromStage: string, count: number) => {
+    const isTechJob = !activeJobDetails ||
+      activeJobDetails.title?.toLowerCase().includes("engineer") ||
+      activeJobDetails.title?.toLowerCase().includes("developer") ||
+      activeJobDetails.title?.toLowerCase().includes("tech") ||
+      activeJobDetails.title?.toLowerCase().includes("full stack") ||
+      activeJobDetails.title?.toLowerCase().includes("software");
+
+    const activeCols = isTechJob ? techColumns : nonTechColumns;
+    const activeKeys = activeCols.map((c) => c.key);
+    const currentIdx = activeKeys.indexOf(fromStage);
+    if (currentIdx === -1 || currentIdx >= activeKeys.length - 1) return;
+
+    const toStage = activeKeys[currentIdx + 1];
+
+    let stageCards = cards.filter((c) => c.status === fromStage);
+
+    // Sort by stage-appropriate objective score (highest score first)
+    if (fromStage === "screening") {
+      stageCards.sort((a, b) => (b.screening_score || b.score || 0) - (a.screening_score || a.score || 0));
+    } else if (fromStage === "mcq") {
+      stageCards.sort((a, b) => (b.mcq_score || 0) - (a.mcq_score || 0));
+    } else if (fromStage === "coding") {
+      stageCards.sort((a, b) => (b.coding_score || 0) - (a.coding_score || 0));
+    } else if (fromStage === "interview") {
+      stageCards.sort((a, b) => (b.interview_avg_score || 0) - (a.interview_avg_score || 0));
+    } else {
+      stageCards.sort((a, b) => (b.score || 0) - (a.score || 0));
+    }
+
+    const targetCards = stageCards.slice(0, count);
+    if (targetCards.length === 0) return;
+
+    if (toStage === "offer_sent") {
+      setOfferModalCard(targetCards[0]);
+      return;
+    }
+
+    const previousCards = [...cards];
+
+    // Optimistic UI update
+    setCards((prev) =>
+      prev.map((c) =>
+        targetCards.some((tc) => tc.id === c.id) ? { ...c, status: toStage } : c
+      )
+    );
+
+    try {
+      const updatePromises = targetCards.map((card) =>
+        fetch(`/api/applications/${card.id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: toStage }),
+        })
+      );
+
+      const results = await Promise.all(updatePromises);
+      const failed = results.some((res) => !res.ok);
+      if (failed) throw new Error();
+      logger.info(`[PipelinePage] Objective Top N advanced ${targetCards.length} candidates from ${fromStage} to ${toStage}`);
+    } catch (err) {
+      logger.error("Top N advancement failed, rolling back UI", err);
+      setCards(previousCards);
+    }
+  };
+
   const handleStartATSScreening = async () => {
     if (!selectedJobId) return;
     setScreeningLoading(true);
@@ -330,42 +752,6 @@ export default function PipelinePage() {
     }
   };
 
-  const handleMoveTopN = async (count: number) => {
-    const screeningCards = cards
-      .filter((c) => c.status === "screening")
-      .sort((a, b) => (b.score || 0) - (a.score || 0));
-
-    const targetCards = screeningCards.slice(0, count);
-    if (targetCards.length === 0) return;
-
-    const previousCards = [...cards];
-
-    // Optimistically update the UI: move selected top N to 'mcq'
-    setCards((prev) =>
-      prev.map((c) =>
-        targetCards.some((tc) => tc.id === c.id) ? { ...c, status: "mcq" } : c
-      )
-    );
-
-    try {
-      const updatePromises = targetCards.map((card) =>
-        fetch(`/api/applications/${card.id}/status`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "mcq" }),
-        })
-      );
-
-      const results = await Promise.all(updatePromises);
-      const failed = results.some((res) => !res.ok);
-      if (failed) throw new Error();
-      logger.info(`[PipelinePage] Batch moved top ${targetCards.length} candidates from screening to mcq`);
-    } catch (err) {
-      logger.error("Move top N transition failed, rolling back UI", err);
-      setCards(previousCards);
-    }
-  };
-
   const handleSaveMCQSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedJobId || !mcqScheduleTime) return;
@@ -377,7 +763,6 @@ export default function PipelinePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scheduledTime: new Date(mcqScheduleTime).toISOString(),
-          assessmentId: selectedTemplateId || undefined,
         }),
       });
 
@@ -403,7 +788,6 @@ export default function PipelinePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scheduledTime: new Date(codingScheduleTime).toISOString(),
-          assessmentId: selectedCodingTemplateId || undefined,
         }),
       });
 
@@ -430,6 +814,8 @@ export default function PipelinePage() {
     try {
       const parsedDate = new Date(interviewDateTime);
       const isoDate = isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
+      const isAiMode = selectedInterviewType === "ai_interview";
+      const targetStatus = isAiMode ? "interview" : "zoom_interview";
 
       const res = await fetch("/api/interviews", {
         method: "POST",
@@ -440,34 +826,36 @@ export default function PipelinePage() {
           durationMinutes: Number(interviewDuration),
           interviewerName: interviewerName || undefined,
           interviewerEmail: interviewerEmail || undefined,
-          meetingLink: meetingLink || undefined,
+          meetingLink: isAiMode ? undefined : (meetingLink || undefined),
           notes: interviewNotes || undefined,
+          interviewType: selectedInterviewType,
         }),
       });
 
       const resData = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(resData.error || resData.message || "Failed to schedule interview");
+        throw new Error(formatErrorMessage(resData, "Failed to schedule interview"));
       }
 
-      // Sync application status to 'interview'
+      // Sync application status to targetStatus ('interview' for AI Video Interview, 'zoom_interview' for Google Meet)
       await fetch(`/api/applications/${interviewCard.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "interview" }),
+        body: JSON.stringify({ status: targetStatus }),
       }).catch(() => {});
 
       // Optimistic state update & refresh
       setCards((prev) =>
         prev.map((c) =>
           c.id === interviewCard.id
-            ? { ...c, status: "interview", interview_scheduled_at: new Date(interviewDateTime).toISOString() }
+            ? { ...c, status: targetStatus, interview_scheduled_at: isoDate }
             : c
         )
       );
 
-      setInterviewModalOpen(false);
       const scheduledCandidateName = interviewCard.candidate_name;
+
+      setInterviewModalOpen(false);
       setInterviewCard(null);
       setInterviewDateTime("");
       setInterviewerName("");
@@ -476,11 +864,17 @@ export default function PipelinePage() {
       setInterviewNotes("");
 
       await fetchPipelineData();
-      alert(`✅ Interview successfully scheduled for ${scheduledCandidateName}!`);
-      logger.info(`[PipelinePage] Interview scheduled for application: ${interviewCard.id}`);
+
+      if (isAiMode) {
+        alert(`✅ AI Video Interview Round Successfully Scheduled!\n\nCandidate: ${scheduledCandidateName}\nDate & Time: ${new Date(isoDate).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}\n\n🤖 AI Interview Lobby is now enabled on the candidate's portal!`);
+      } else {
+        const finalMeetLink = resData.data?.meeting_link || meetingLink;
+        alert(`✅ Recruiter Google Meet Interview Successfully Scheduled!\n\nCandidate: ${scheduledCandidateName}\nGoogle Meet Link: ${finalMeetLink}\nDate & Time: ${new Date(isoDate).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}`);
+      }
+      logger.info(`[PipelinePage] Interview (${selectedInterviewType}) scheduled for application: ${interviewCard.id}`);
     } catch (err: unknown) {
       logger.error("Failed to save interview schedule", err);
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : formatErrorMessage(err, "Failed to schedule interview");
       alert(`Scheduling Error: ${msg}`);
     } finally {
       setInterviewSubmitting(false);
@@ -580,155 +974,47 @@ export default function PipelinePage() {
         />
       </div>
 
-      {/* Top Bins Drop Zones */}
-      {!loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4.5 pt-2">
-          {[
-            { key: "offered", name: "Offers", bg: "bg-emerald-50/20 hover:bg-emerald-50/45", border: "border-emerald-200 hover:border-emerald-400", text: "text-emerald-600", icon: CheckCircle2 },
-            { key: "rejected", name: "Rejected", bg: "bg-red-50/20 hover:bg-red-50/45", border: "border-red-200 hover:border-red-400", text: "text-red-600", icon: XCircle },
-            { key: "withdrawn", name: "Withdrawn", bg: "bg-zinc-50/30 hover:bg-zinc-50/70", border: "border-zinc-200 hover:border-zinc-400", text: "text-zinc-600", icon: Archive },
-          ].map((bin) => {
-            const binCards = cards.filter((c) => c.status === bin.key);
-            const Icon = bin.icon;
 
-            return (
-              <div
-                key={bin.key}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, bin.key)}
-                onClick={() => setActiveBinKey(bin.key)}
-                className={`flex items-center justify-between p-4 rounded-xl border border-dashed ${bin.border} ${bin.bg} transition-all duration-200 cursor-pointer group shadow-sm`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 rounded-lg bg-white border border-zinc-200 shrink-0 shadow-sm">
-                    <Icon className={`h-4.5 w-4.5 ${bin.text}`} />
-                  </div>
-                  <div className="text-left">
-                    <h4 className="text-[11px] font-bold text-zinc-900 uppercase tracking-wider">
-                      {bin.name} Bin
-                    </h4>
-                    <p className="text-[9px] text-zinc-500 font-semibold group-hover:text-zinc-700 transition-colors">
-                      Click to review / Drag here
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center rounded-full bg-white border px-2.5 py-0.5 text-xs font-bold text-zinc-900 shadow-sm tabular-nums">
-                    {binCards.length}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Bin Candidates List Modal */}
-      {activeBinKey && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-zinc-200 shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col text-left overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-zinc-150 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-zinc-900 capitalize">
-                  {activeBinKey === "offered" ? "Offers" : activeBinKey} Bin Candidates
-                </h3>
-                <p className="text-[11px] text-zinc-500 font-semibold mt-0.5">
-                  Review finalized applicants and reset them back to the active pipeline.
-                </p>
-              </div>
-              <button
-                onClick={() => setActiveBinKey(null)}
-                className="text-zinc-400 hover:text-zinc-650 font-bold text-sm h-8 w-8 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors"
-              >
-                âœ•
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-5 overflow-y-auto space-y-3.5 flex-grow max-h-[50vh] no-scrollbar">
-              {cards.filter((c) => c.status === activeBinKey).length === 0 ? (
-                <div className="text-center py-10 text-zinc-500 italic text-xs border border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
-                  No candidates currently in this stage bin.
-                </div>
-              ) : (
-                cards
-                  .filter((c) => c.status === activeBinKey)
-                  .map((cand) => (
-                    <div
-                      key={cand.id}
-                      className="p-3.5 rounded-xl border border-zinc-200 bg-zinc-50/10 flex items-center justify-between gap-4 hover:border-zinc-300 transition-colors"
-                    >
-                      <div className="space-y-0.5 text-left">
-                        <p className="font-bold text-sm text-zinc-900">{cand.candidate_name}</p>
-                        <p className="text-[10px] text-zinc-500 font-medium">{cand.candidate_email}</p>
-                        <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider mt-1.5">
-                          Position: {cand.job_title}
-                        </p>
-                      </div>
-                      <Button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          const previousCards = [...cards];
-                          // Optimistic update - move back to applied
-                          setCards((prev) =>
-                            prev.map((c) => (c.id === cand.id ? { ...c, status: "applied" } : c))
-                          );
-                          try {
-                            const res = await fetch(`/api/applications/${cand.id}/status`, {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ status: "applied" }),
-                            });
-                            if (!res.ok) throw new Error();
-                            logger.info(`[PipelinePage] Application ${cand.id} reset to active applied column`);
-                          } catch (err) {
-                            logger.error("Reset status request failed, rolling back UI", err);
-                            setCards(previousCards);
-                          }
-                        }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold h-8 px-3 rounded-lg shadow-sm"
-                      >
-                        Reset to Applied
-                      </Button>
-                    </div>
-                  ))
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-zinc-150 bg-zinc-50/40 flex justify-end">
-              <Button
-                onClick={() => setActiveBinKey(null)}
-                className="bg-zinc-800 hover:bg-zinc-900 text-white text-xs font-bold px-4 h-9 rounded-lg"
-              >
-                Close Window
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Kanban Board Container */}
-      {loading ? (
-        <div className="flex gap-4 overflow-x-auto pb-6 pt-2 select-none no-scrollbar snap-x snap-mandatory">
-          {columns.slice(0, 4).map((col) => (
-            <div key={col.key} className="w-72 shrink-0 flex flex-col bg-[#F5F5F7] rounded-[16px] border border-[#D2D2D7] p-4 min-h-[500px]">
-              <div className="flex justify-between items-center mb-4 border-b border-[#E8E8ED] pb-2">
-                <span className="h-3 w-16 bg-[#AEAEB2]/30 rounded-md sh-skeleton" />
-                <span className="h-4 w-6 bg-[#AEAEB2]/30 rounded-full sh-skeleton" />
+      {(() => {
+        const isTechJob = !activeJobDetails ||
+          activeJobDetails.title?.toLowerCase().includes("engineer") ||
+          activeJobDetails.title?.toLowerCase().includes("developer") ||
+          activeJobDetails.title?.toLowerCase().includes("tech") ||
+          activeJobDetails.title?.toLowerCase().includes("full stack") ||
+          activeJobDetails.title?.toLowerCase().includes("software");
+
+        const activeColumns = isTechJob ? techColumns : nonTechColumns;
+
+        return loading ? (
+          <div className="flex gap-4 overflow-x-auto pb-6 pt-2 select-none no-scrollbar snap-x snap-mandatory">
+            {activeColumns.slice(0, 4).map((col) => (
+              <div key={col.key} className="w-72 shrink-0 flex flex-col bg-[#F5F5F7] rounded-[16px] border border-[#D2D2D7] p-4 min-h-[500px]">
+                <div className="flex justify-between items-center mb-4 border-b border-[#E8E8ED] pb-2">
+                  <span className="h-3 w-16 bg-[#AEAEB2]/30 rounded-md sh-skeleton" />
+                  <span className="h-4 w-6 bg-[#AEAEB2]/30 rounded-full sh-skeleton" />
+                </div>
+                <div className="space-y-3">
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </div>
               </div>
-              <div className="space-y-3">
-                <SkeletonCard />
-                <SkeletonCard />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex gap-4 overflow-x-auto pb-6 pt-2 select-none no-scrollbar snap-x snap-mandatory">
-          {columns.map((col) => {
-            let colCards = cards.filter((c) => c.status === col.key);
+            ))}
+          </div>
+        ) : (
+          <div className="flex gap-4 overflow-x-auto pb-6 pt-2 select-none no-scrollbar snap-x snap-mandatory">
+            {activeColumns.map((col) => {
+              let colCards = cards.filter((c) => {
+                if (c.status === "rejected" || c.status === "withdrawn") {
+                  const rejStage = c.rejection_stage || "screening";
+                  return getCanonicalStageKey(rejStage) === col.key;
+                }
+                if (col.key === "interview") return ["interview", "ai_interview"].includes(c.status);
+                if (col.key === "zoom_interview") return ["zoom_interview", "recruiter_review", "interview_scheduled", "final_interview"].includes(c.status);
+                if (col.key === "offer_sent") return ["offer_sent", "offer_accepted", "joined", "offered"].includes(c.status);
+                return c.status === col.key;
+              });
             // Sort each column by its stage-specific score (highest first)
             if (col.key === "screening") {
               colCards = [...colCards].sort((a, b) => (b.screening_score || b.score || 0) - (a.screening_score || a.score || 0));
@@ -810,7 +1096,7 @@ export default function PipelinePage() {
                         {colCards.length > 0 && (
                           <div className="pt-2 border-t border-zinc-100 space-y-2">
                             <div className="flex items-center justify-between text-[9px] font-bold text-zinc-500">
-                              <span>Move Top Cohort:</span>
+                              <span>Objective Top N Advancement:</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <select
@@ -818,17 +1104,17 @@ export default function PipelinePage() {
                                 onChange={(e) => setTopNLimit(Number(e.target.value))}
                                 className="h-7 text-[10px] font-bold rounded-lg border border-[#D2D2D7] bg-white px-2 py-0.5 outline-none select-none text-zinc-800"
                               >
-                                {[3, 5, 10, 30, 50].map((num) => (
+                                {[1, 3, 5, 10, 20, 50].map((num) => (
                                   <option key={num} value={num}>
                                     Top {num}
                                   </option>
                                 ))}
                               </select>
                               <button
-                                onClick={() => handleMoveTopN(topNLimit)}
+                                onClick={() => handleAdvanceTopN("screening", topNLimit)}
                                 className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] font-bold h-7 rounded-lg transition-colors cursor-pointer"
                               >
-                                Move Top {Math.min(topNLimit, colCards.length)}
+                                Advance Top {Math.min(topNLimit, colCards.length)}
                               </button>
                             </div>
                           </div>
@@ -989,310 +1275,685 @@ export default function PipelinePage() {
                   </div>
                 )}
 
-                {/* Column Cards Stack */}
-                <div className="flex-grow space-y-3.5 overflow-y-auto max-h-[600px] pr-1 no-scrollbar">
-                  {colCards.map((card) => (
-                    <ApplicationCard
-                      key={card.id}
-                      card={card}
-                      onClick={(c) => {
-                        if (col.key === "interview") {
-                          setInterviewCard(c);
-                          setInterviewDateTime(c.interview_scheduled_at ? new Date(new Date(c.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : getDefaultDatetimeLocal());
-                          setInterviewModalOpen(true);
-                        } else {
-                          setActiveCard(c);
-                        }
-                      }}
-                    />
-                  ))}
-
-                  {colCards.length === 0 && (
-                    <div className="h-24 border border-dashed border-[#D2D2D7] bg-white/50 rounded-[16px] flex items-center justify-center text-[11px] text-[#AEAEB2] italic">
-                      Drag cards here
+                {/* Recruiter Google Meet control panel */}
+                {col.key === "zoom_interview" && (
+                  <div className="mb-3.5 p-3 rounded-xl bg-white border border-[#D2D2D7] shadow-sm space-y-2.5 text-left">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Video className="h-3.5 w-3.5 text-blue-600" />
+                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Recruiter Meet Room</span>
+                      </div>
+                      <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 tabular-nums">
+                        {colCards.length} Active
+                      </span>
                     </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-          </div>
+                    <p className="text-[9px] text-zinc-500 font-medium leading-relaxed">
+                      Conclude live interview, mark panel completed, and advance candidates to Offer Stage.
+                    </p>
+                    {colCards.length > 0 && (
+                      <button
+                        onClick={() => {
+                          const targetCard = colCards[0];
+                          if (targetCard) openOfferModalFor(targetCard);
+                        }}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold h-7.5 rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> End Meeting & Complete Round
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Column Cards Stack */}
+<div className="flex-grow space-y-3.5 overflow-y-auto max-h-[600px] pr-1 no-scrollbar">
+  {colCards.map((card) => {
+    const colIdx = activeColumns.findIndex((c) => c.key === col.key);
+    const nextCol = colIdx >= 0 && colIdx < activeColumns.length - 1 ? activeColumns[colIdx + 1] : null;
+
+    return (
+      <ApplicationCard
+        key={card.id}
+        card={card}
+        onClick={(c) => {
+          if (col.key === "interview") {
+            setInterviewCard(c);
+            setInterviewDateTime(c.interview_scheduled_at ? new Date(new Date(c.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : getDefaultDatetimeLocal());
+            setInterviewModalOpen(true);
+          } else {
+            setActiveCard(c);
+          }
+        }}
+        onAdvance={handleAdvanceSingleCandidate}
+        onReject={col.key === "offer_sent" ? undefined : (c) => handleRejectCandidate(c, col.key)}
+        onReinstate={(c) => handleReinstateCandidate(c, col.key)}
+        nextStageName={nextCol?.name}
+      />
+    );
+  })}
+
+  {colCards.length === 0 && (
+    <div className="h-24 border border-dashed border-[#D2D2D7] bg-white/50 rounded-[16px] flex items-center justify-center text-[11px] text-[#AEAEB2] italic">
+      Drag cards here
+    </div>
+  )}
+</div>
+</div>
+);
+})}
+</div>
+);
+})()}
+</>
+)}
+
+{/* Side Slide-out Details Drawer */}
+<CandidateDrawer
+card={activeCard}
+onClose={() => setActiveCard(null)}
+onScheduleInterview={(c) => {
+  setInterviewCard(c);
+  setInterviewDateTime(c.interview_scheduled_at ? new Date(new Date(c.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : getDefaultDatetimeLocal());
+  setInterviewModalOpen(true);
+}}
+/>
+
+{/* MCQ Scheduling Modal */}
+{mcqModalOpen && (
+<div className="fixed inset-0 bg-[#1D1D1F]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+  <form
+    onSubmit={handleSaveMCQSchedule}
+    className="w-full max-w-md bg-white border border-[#D2D2D7] rounded-[20px] shadow-2xl p-6 space-y-4 text-left scale-in-center"
+  >
+    <div>
+      <h3 className="text-base font-bold text-zinc-900">Schedule MCQ Screening Exam</h3>
+      <p className="text-[11px] text-[#6E6E73] mt-1 font-medium leading-relaxed">
+        Set the exam start time and attach your PDF question template for candidates in the MCQ round.
+      </p>
+    </div>
+
+    <div className="space-y-4 pt-1">
+      <PdfUploader
+        label="Upload MCQ Question Template PDF"
+        description="Upload MCQ question template (.pdf file)"
+        file={mcqPdfFile}
+        onFileChange={setMcqPdfFile}
+      />
+
+      <div className="space-y-1">
+        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
+          Select Exam Start Date & Time *
+        </label>
+        <input
+          type="datetime-local"
+          value={mcqScheduleTime}
+          onChange={(e) => setMcqScheduleTime(e.target.value)}
+          required
+          className="w-full rounded-xl border border-[#D2D2D7] bg-[#F5F5F7] px-3.5 py-2.5 text-[13px] text-zinc-800 font-bold focus:border-[#0071E3] focus:outline-none transition-colors"
+        />
+      </div>
+    </div>
+
+    <div className="flex justify-end gap-3 pt-4 border-t border-zinc-100">
+      <button
+        type="button"
+        onClick={() => {
+          setMcqModalOpen(false);
+          setMcqPdfFile(null);
+        }}
+        className="px-4 py-2 text-[12px] font-bold text-zinc-650 rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer"
+      >
+        Cancel
+      </button>
+      <button
+        type="submit"
+        disabled={mcqSubmitting || !mcqScheduleTime}
+        className="bg-[#0071E3] hover:bg-[#0051A3] text-white text-[12px] font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {mcqSubmitting ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scheduling...
+          </>
+        ) : (
+          "Confirm & Schedule Round"
         )}
+      </button>
+    </div>
+  </form>
+</div>
+)}
+
+{/* Coding Scheduling Modal */}
+{codingModalOpen && (
+<div className="fixed inset-0 bg-[#1D1D1F]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+  <form
+    onSubmit={handleSaveCodingSchedule}
+    className="w-full max-w-md bg-white border border-[#D2D2D7] rounded-[20px] shadow-2xl p-6 space-y-4 text-left scale-in-center"
+  >
+    <div>
+      <h3 className="text-base font-bold text-zinc-900">Schedule Coding Interview Round</h3>
+      <p className="text-[11px] text-[#6E6E73] mt-1 font-medium leading-relaxed">
+        Set the coding interview round start time and attach your problem statement PDF template.
+      </p>
+    </div>
+
+    <div className="space-y-4 pt-1">
+      <PdfUploader
+        label="Upload Coding Problem Template PDF"
+        description="Upload custom problem statements & test specs (.pdf file)"
+        file={codingPdfFile}
+        onFileChange={setCodingPdfFile}
+      />
+
+      <div className="space-y-1">
+        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
+          Select Coding Exam Start Date & Time *
+        </label>
+        <input
+          type="datetime-local"
+          value={codingScheduleTime}
+          onChange={(e) => setCodingScheduleTime(e.target.value)}
+          required
+          className="w-full rounded-xl border border-[#D2D2D7] bg-[#F5F5F7] px-3.5 py-2.5 text-[13px] text-zinc-800 font-bold focus:border-emerald-600 focus:outline-none transition-colors"
+        />
+      </div>
+    </div>
+
+    <div className="flex justify-end gap-3 pt-4 border-t border-zinc-100">
+      <button
+        type="button"
+        onClick={() => {
+          setCodingModalOpen(false);
+          setCodingPdfFile(null);
+        }}
+        className="px-4 py-2 text-[12px] font-bold text-zinc-650 rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer"
+      >
+        Cancel
+      </button>
+      <button
+        type="submit"
+        disabled={codingSubmitting || !codingScheduleTime}
+        className="bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {codingSubmitting ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scheduling...
+          </>
+        ) : (
+          "Confirm & Schedule Coding Round"
+        )}
+      </button>
+    </div>
+  </form>
+</div>
+)}
+
+{/* Interview Scheduling Modal */}
+{interviewModalOpen && (
+<div className="fixed inset-0 bg-[#1D1D1F]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+  <form
+    onSubmit={handleSaveInterviewSchedule}
+    className="w-full max-w-lg bg-white border border-[#D2D2D7] rounded-[20px] shadow-2xl p-6 space-y-5 text-left"
+  >
+    {/* Header */}
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center">
+            <Video className="h-4 w-4 text-violet-600" />
+          </div>
+          <h3 className="text-base font-bold text-zinc-900">Schedule Interview</h3>
+        </div>
+        {interviewCard && (
+          <p className="text-[11px] text-zinc-500 font-medium">
+            Candidate: <span className="font-bold text-zinc-800">{interviewCard.candidate_name}</span> — {interviewCard.job_title}
+          </p>
+        )}
+      </div>
+      <button type="button" onClick={() => { setInterviewModalOpen(false); setInterviewCard(null); setInterviewPdfFile(null); }}
+        className="text-zinc-400 hover:text-zinc-700 h-8 w-8 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors">
+        ✕
+      </button>
+    </div>
+
+    <div className="grid grid-cols-2 gap-3.5">
+      {/* 1. Round Type Selector Card */}
+      <div className="col-span-2 space-y-1.5 text-left">
+        <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block">
+          Select Evaluation Round Type *
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <div
+            onClick={() => setSelectedInterviewType("ai_interview")}
+            className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
+              selectedInterviewType === "ai_interview"
+                ? "border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/20"
+                : "border-zinc-200 bg-white hover:border-zinc-300"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-blue-600" /> AI Video Interview Round
+              </span>
+              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-600 text-white uppercase">AI Lobby</span>
+            </div>
+            <p className="text-[11px] text-zinc-600 mt-1.5 leading-tight font-medium">
+              Candidate conducts AI video interview in browser lobby. Rated by Gemini AI with automated scorecard.
+            </p>
+          </div>
+
+          <div
+            onClick={() => setSelectedInterviewType("zoom_interview")}
+            className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
+              selectedInterviewType === "zoom_interview"
+                ? "border-violet-600 bg-violet-50/80 ring-2 ring-violet-500/20"
+                : "border-zinc-200 bg-white hover:border-zinc-300"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-violet-950 flex items-center gap-1.5">
+                <Video className="h-4 w-4 text-violet-600" /> Recruiter Live Call
+              </span>
+              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-violet-600 text-white uppercase">Google Meet</span>
+            </div>
+            <p className="text-[11px] text-zinc-600 mt-1.5 leading-tight font-medium">
+              Live video call with human recruiter. Sends Google Meet link for final round evaluation.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Conditional Details based on Type */}
+      {selectedInterviewType === "ai_interview" ? (
+        <div className="col-span-2 p-3.5 bg-blue-50/80 border border-blue-200/80 rounded-2xl flex items-center gap-3 text-left">
+          <div className="p-2.5 rounded-xl bg-blue-600 text-white shrink-0 shadow-sm">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="text-xs font-extrabold text-blue-950">AI Video Lobby Option Enabled</h4>
+            <p className="text-[11px] text-blue-900 font-medium leading-relaxed mt-0.5">
+              Candidate will be able to enter the <strong>AI Video Interview Room</strong> directly from their applicant portal at the scheduled time. No Google Meet link required!
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Google Meet Link Generator Card */}
+          <div className="col-span-2 p-3.5 bg-violet-50/60 border border-violet-200/60 rounded-2xl space-y-2 text-left shadow-2xs">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-extrabold text-violet-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Video className="h-3.5 w-3.5 text-violet-600" /> Google Meet Video Room Link *
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const code = `smh-${Math.random().toString(36).slice(2, 5)}-${Math.random().toString(36).slice(2, 6)}`;
+                  setMeetingLink(`https://meet.google.com/${code}`);
+                }}
+                className="text-[10px] font-bold text-violet-700 hover:text-violet-900 bg-white border border-violet-200 px-2.5 py-1 rounded-lg shadow-2xs cursor-pointer flex items-center gap-1 transition-colors"
+              >
+                ⚡ Auto-Generate Link
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="url"
+                value={meetingLink}
+                onChange={e => setMeetingLink(e.target.value)}
+                placeholder="https://meet.google.com/smh-xxx-xxxx"
+                required={selectedInterviewType === "zoom_interview"}
+                className="flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2 text-[12px] font-bold text-zinc-900 focus:border-violet-600 focus:outline-none shadow-2xs"
+              />
+              {meetingLink && (
+                <a
+                  href={meetingLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold shrink-0 transition-colors shadow-2xs flex items-center gap-1"
+                >
+                  Test Link 🔗
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Interviewer Name & Email */}
+          <div className="col-span-1 space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Interviewer Name</label>
+            <input
+              type="text"
+              value={interviewerName}
+              onChange={e => setInterviewerName(e.target.value)}
+              placeholder="e.g. Sarah Jenkins"
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[12px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="col-span-1 space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Interviewer Email</label>
+            <input
+              type="email"
+              value={interviewerEmail}
+              onChange={e => setInterviewerEmail(e.target.value)}
+              placeholder="interviewer@company.com"
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[12px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none"
+            />
+          </div>
         </>
       )}
 
-      {/* Side Slide-out Details Drawer */}
-      <CandidateDrawer
-        card={activeCard}
-        onClose={() => setActiveCard(null)}
-        onScheduleInterview={(c) => {
-          setInterviewCard(c);
-          setInterviewDateTime(c.interview_scheduled_at ? new Date(new Date(c.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : getDefaultDatetimeLocal());
-          setInterviewModalOpen(true);
-        }}
-      />
+      <div className="col-span-2">
+        <PdfUploader
+          label="Upload Interview Evaluation Rubric / Questions PDF (Optional)"
+          description="Upload custom interview questions or rubric (.pdf file)"
+          file={interviewPdfFile}
+          onFileChange={setInterviewPdfFile}
+        />
+      </div>
 
-      {/* MCQ Scheduling Modal */}
-      {mcqModalOpen && (
-        <div className="fixed inset-0 bg-[#1D1D1F]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <form
-            onSubmit={handleSaveMCQSchedule}
-            className="w-full max-w-md bg-white border border-[#D2D2D7] rounded-[20px] shadow-2xl p-6 space-y-4 text-left scale-in-center"
-          >
-            <div>
-              <h3 className="text-base font-bold text-zinc-900">Schedule MCQ Screening Exam</h3>
-              <p className="text-[11px] text-[#6E6E73] mt-1 font-medium leading-relaxed">
-                Set the exam start time. When reached, candidates in the MCQ column will automatically be permitted to start the test.
-              </p>
-            </div>
+      {/* Date & Time */}
+      <div className="col-span-1 space-y-1">
+        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
+          <Calendar className="h-3 w-3" /> Interview Date & Time *
+        </label>
+        <input
+          type="datetime-local"
+          value={interviewDateTime}
+          onChange={e => setInterviewDateTime(e.target.value)}
+          required
+          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2 text-[12px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none transition-colors"
+        />
+      </div>
 
-            <div className="space-y-3 pt-2">
-              <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50/50 via-blue-50/30 to-purple-50/20 p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-950">
-                    <Sparkles className="h-4 w-4 text-indigo-600 animate-pulse" />
-                    <span>AI MCQ Assessment Generator</span>
-                  </div>
-                  <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
-                    Auto-Tailored
-                  </span>
-                </div>
-                <p className="text-[11px] text-zinc-650 font-medium leading-relaxed">
-                  MCQ questions will be <strong>automatically generated</strong> based on the job description, required skills, and domain context.
-                </p>
-                <div className="pt-1 flex items-center justify-between text-[11px] text-indigo-800 font-semibold">
-                  <span>Custom Template (Optional):</span>
-                  <select
-                    value={selectedTemplateId}
-                    onChange={(e) => setSelectedTemplateId(e.target.value)}
-                    className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 focus:outline-none"
-                  >
-                    <option value="">âœ¨ Auto AI Generated (Recommended)</option>
-                    {assessmentTemplates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+      {/* Duration */}
+      <div className="col-span-1 space-y-1">
+        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
+          <Clock className="h-3 w-3" /> Duration
+        </label>
+        <select
+          value={interviewDuration}
+          onChange={e => setInterviewDuration(e.target.value)}
+          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2 text-[12px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none"
+        >
+          <option value="30">30 minutes</option>
+          <option value="45">45 minutes</option>
+          <option value="60">60 minutes</option>
+          <option value="90">90 minutes</option>
+          <option value="120">2 hours</option>
+        </select>
+      </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
-                  Select Exam Start Date & Time
-                </label>
-                <input
-                  type="datetime-local"
-                  value={mcqScheduleTime}
-                  onChange={(e) => setMcqScheduleTime(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-[#D2D2D7] bg-[#F5F5F7] px-3.5 py-2.5 text-[13px] text-zinc-800 font-bold focus:border-[#0071E3] focus:outline-none transition-colors"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-100">
-              <button
-                type="button"
-                onClick={() => setMcqModalOpen(false)}
-                className="px-4 py-2 text-[12px] font-bold text-zinc-650 rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={mcqSubmitting || !mcqScheduleTime}
-                className="bg-[#0071E3] hover:bg-[#0051A3] text-white text-[12px] font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {mcqSubmitting ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scheduling...
-                  </>
-                ) : (
-                  "Confirm & Schedule Round"
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Coding Scheduling Modal */}
-      {codingModalOpen && (
-        <div className="fixed inset-0 bg-[#1D1D1F]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <form
-            onSubmit={handleSaveCodingSchedule}
-            className="w-full max-w-md bg-white border border-[#D2D2D7] rounded-[20px] shadow-2xl p-6 space-y-4 text-left scale-in-center"
-          >
-            <div>
-              <h3 className="text-base font-bold text-zinc-900">Schedule Coding Interview Round</h3>
-              <p className="text-[11px] text-[#6E6E73] mt-1 font-medium leading-relaxed">
-                Set the coding interview round start time. Selected candidates will automatically receive notifications and will be allowed into the built-in IDE environment when live.
-              </p>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/50 via-teal-50/30 to-blue-50/20 p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-950">
-                    <Sparkles className="h-4 w-4 text-emerald-600 animate-pulse" />
-                    <span>AI Coding Assessment Generator</span>
-                  </div>
-                  <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    Auto-Tailored
-                  </span>
-                </div>
-                <p className="text-[11px] text-zinc-650 font-medium leading-relaxed">
-                  Coding interview problems & test cases will be <strong>automatically generated</strong> based on the job description and required tech stack.
-                </p>
-                <div className="pt-1 flex items-center justify-between text-[11px] text-emerald-800 font-semibold">
-                  <span>Custom Template (Optional):</span>
-                  <select
-                    value={selectedCodingTemplateId}
-                    onChange={(e) => setSelectedCodingTemplateId(e.target.value)}
-                    className="rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 focus:outline-none"
-                  >
-                    <option value="">âœ¨ Auto AI Generated (Recommended)</option>
-                    {assessmentTemplates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
-                  Select Coding Exam Start Date & Time
-                </label>
-                <input
-                  type="datetime-local"
-                  value={codingScheduleTime}
-                  onChange={(e) => setCodingScheduleTime(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-[#D2D2D7] bg-[#F5F5F7] px-3.5 py-2.5 text-[13px] text-zinc-800 font-bold focus:border-emerald-600 focus:outline-none transition-colors"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-100">
-              <button
-                type="button"
-                onClick={() => setCodingModalOpen(false)}
-                className="px-4 py-2 text-[12px] font-bold text-zinc-650 rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={codingSubmitting || !codingScheduleTime}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {codingSubmitting ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scheduling...
-                  </>
-                ) : (
-                  "Confirm & Schedule Coding Round"
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Interview Scheduling Modal */}
-      {interviewModalOpen && (
-        <div className="fixed inset-0 bg-[#1D1D1F]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <form
-            onSubmit={handleSaveInterviewSchedule}
-            className="w-full max-w-lg bg-white border border-[#D2D2D7] rounded-[20px] shadow-2xl p-6 space-y-5 text-left"
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center">
-                    <Video className="h-4 w-4 text-violet-600" />
-                  </div>
-                  <h3 className="text-base font-bold text-zinc-900">Schedule Interview</h3>
-                </div>
-                {interviewCard && (
-                  <p className="text-[11px] text-zinc-500 font-medium">
-                    Candidate: <span className="font-bold text-zinc-800">{interviewCard.candidate_name}</span> — {interviewCard.job_title}
-                  </p>
-                )}
-              </div>
-              <button type="button" onClick={() => { setInterviewModalOpen(false); setInterviewCard(null); }}
-                className="text-zinc-400 hover:text-zinc-700 h-8 w-8 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors">
-                ✕
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {/* Date & Time */}
-              <div className="col-span-2 space-y-1">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Interview Date & Time *
-                </label>
-                <input
-                  type="datetime-local"
-                  value={interviewDateTime}
-                  onChange={e => setInterviewDateTime(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-[13px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none transition-colors"
-                />
-              </div>
-
-              {/* Duration */}
-              <div className="col-span-2 space-y-1">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> Duration
-                </label>
-                <select
-                  value={interviewDuration}
-                  onChange={e => setInterviewDuration(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-[13px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none"
-                >
-                  <option value="30">30 minutes</option>
-                  <option value="45">45 minutes</option>
-                  <option value="60">60 minutes</option>
-                  <option value="90">90 minutes</option>
-                  <option value="120">2 hours</option>
-                </select>
-              </div>
-
-              {/* Notes */}
-              <div className="col-span-2 space-y-1">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Focus Topics / Notes (Optional)</label>
-                <textarea
-                  value={interviewNotes}
-                  onChange={e => setInterviewNotes(e.target.value)}
-                  placeholder="Topics to cover, specific technical areas for AI to probe..."
-                  rows={2}
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-[12px] text-zinc-800 focus:border-violet-500 focus:outline-none resize-none placeholder:text-zinc-300"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2 border-t border-zinc-100">
-              <button type="button" onClick={() => { setInterviewModalOpen(false); setInterviewCard(null); }}
-                className="px-4 py-2 text-[12px] font-bold text-zinc-600 rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer">
-                Cancel
-              </button>
-              <button type="submit" disabled={interviewSubmitting || !interviewDateTime}
-                className="bg-violet-600 hover:bg-violet-700 text-white text-[12px] font-bold px-5 py-2 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
-                {interviewSubmitting ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Scheduling...</>
-                ) : (
-                  <><Video className="h-3.5 w-3.5" /> Confirm Interview</>
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {/* Notes */}
+      <div className="col-span-2 space-y-1">
+        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Focus Topics / Notes (Optional)</label>
+        <textarea
+          value={interviewNotes}
+          onChange={e => setInterviewNotes(e.target.value)}
+          placeholder="Topics to cover, specific technical areas to probe..."
+          rows={2}
+          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2 text-[12px] text-zinc-800 focus:border-violet-500 focus:outline-none resize-none placeholder:text-zinc-300"
+        />
+      </div>
     </div>
-  );
+
+    <div className="flex justify-end gap-3 pt-2 border-t border-zinc-100">
+      <button type="button" onClick={() => { setInterviewModalOpen(false); setInterviewCard(null); setInterviewPdfFile(null); }}
+        className="px-4 py-2 text-[12px] font-bold text-zinc-600 rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer">
+        Cancel
+      </button>
+      <button type="submit" disabled={interviewSubmitting || !interviewDateTime}
+        className="bg-violet-600 hover:bg-violet-700 text-white text-[12px] font-bold px-5 py-2 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+        {interviewSubmitting ? (
+          <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Scheduling...</>
+        ) : (
+          <><Video className="h-3.5 w-3.5" /> Confirm Interview</>
+        )}
+      </button>
+    </div>
+  </form>
+</div>
+)}
+
+{/* Offer Letter Generator & PDF Preview Modal */}
+{offerModalCard && (
+<div className="fixed inset-0 bg-[#1D1D1F]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+  <div className="w-full max-w-4xl bg-white border border-[#D2D2D7] rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-left">
+    {/* Header */}
+    <div className="p-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex justify-between items-center shrink-0">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white">
+          <FileText className="h-5 w-5" />
+        </div>
+        <div>
+          <h3 className="text-base font-extrabold">Generate Official Offer Letter PDF</h3>
+          <p className="text-[11px] text-emerald-100 font-medium">
+            Candidate: <span className="font-bold underline">{offerModalCard.candidate_name}</span> ({offerModalCard.candidate_email})
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => setOfferModalCard(null)}
+        className="text-white/80 hover:text-white h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-base transition-colors"
+      >
+        ✕
+      </button>
+    </div>
+
+    {/* Body Split Grid */}
+    <div className="flex-1 grid grid-cols-1 md:grid-cols-5 overflow-hidden">
+      {/* Left Form Controls (2 cols) */}
+      <div className="md:col-span-2 p-5 border-r border-zinc-200 bg-zinc-50/50 space-y-3.5 overflow-y-auto">
+        <h4 className="text-xs font-extrabold text-zinc-900 uppercase tracking-wider">Offer Details</h4>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Hiring Organization / Company Name *</label>
+          <input
+            type="text"
+            value={offerCompanyName}
+            onChange={(e) => setOfferCompanyName(e.target.value)}
+            placeholder="e.g. Acme Technologies Inc."
+            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs font-bold text-zinc-900 focus:border-emerald-600 focus:outline-none"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Company Division / Dept</label>
+          <input
+            type="text"
+            value={offerCompanyDivision}
+            onChange={(e) => setOfferCompanyDivision(e.target.value)}
+            placeholder="e.g. Corporate HR & Talent Acquisition Division"
+            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs font-bold text-zinc-900 focus:border-emerald-600 focus:outline-none"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Candidate Name</label>
+          <input
+            type="text"
+            readOnly
+            value={offerModalCard.candidate_name}
+            className="w-full rounded-xl border border-zinc-200 bg-zinc-100 px-3 py-2 text-xs font-bold text-zinc-800"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Job Title / Role</label>
+          <input
+            type="text"
+            readOnly
+            value={offerModalCard.job_title}
+            className="w-full rounded-xl border border-zinc-200 bg-zinc-100 px-3 py-2 text-xs font-bold text-zinc-800"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Annual Salary / Compensation *</label>
+          <input
+            type="text"
+            value={offerSalary}
+            onChange={(e) => setOfferSalary(e.target.value)}
+            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs font-bold text-zinc-900 focus:border-emerald-600 focus:outline-none"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Proposed Start / Joining Date *</label>
+          <input
+            type="date"
+            value={offerJoiningDate}
+            onChange={(e) => setOfferJoiningDate(e.target.value)}
+            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs font-bold text-zinc-900 focus:border-emerald-600 focus:outline-none"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Work Location / Model</label>
+          <input
+            type="text"
+            value={offerLocation}
+            onChange={(e) => setOfferLocation(e.target.value)}
+            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs font-bold text-zinc-900 focus:border-emerald-600 focus:outline-none"
+          />
+        </div>
+      </div>
+
+      {/* Right Offer Letter PDF Document Preview (3 cols) */}
+      <div className="md:col-span-3 p-6 bg-zinc-200/80 overflow-y-auto flex flex-col items-center">
+        <div className="w-full max-w-lg bg-white text-zinc-900 rounded-2xl shadow-2xl p-8 space-y-5 text-left border border-zinc-300 font-sans leading-relaxed text-xs">
+          {/* Document Header */}
+          <div className="border-b-2 border-zinc-900 pb-4 flex justify-between items-end">
+            <div>
+              <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-widest block">Official Appointment Document</span>
+              <h2 className="text-base font-black text-zinc-900 tracking-tight mt-0.5 uppercase">{offerCompanyName || "HIRING COMPANY"}</h2>
+              <p className="text-[10px] text-zinc-500 font-medium">{offerCompanyDivision || "Corporate HR Division"}</p>
+            </div>
+            <div className="text-right text-[9px] font-mono text-zinc-500 font-bold">
+              <div>REF: OFFER-2026-{offerModalCard.id.slice(0, 6)}</div>
+              <div>DATE: {new Date().toLocaleDateString("en-US", { dateStyle: "long" })}</div>
+            </div>
+          </div>
+
+          {/* Letter Recipient */}
+          <div className="space-y-0.5">
+            <p className="font-bold text-zinc-900">To:</p>
+            <p className="font-extrabold text-sm text-zinc-900">{offerModalCard.candidate_name}</p>
+            <p className="text-zinc-600 text-[11px]">{offerModalCard.candidate_email}</p>
+          </div>
+
+          {/* Subject */}
+          <div className="font-bold text-zinc-900 border-l-4 border-emerald-600 pl-3 py-1 bg-emerald-50 text-[11px]">
+            SUBJECT: Employment Offer for Position of {offerModalCard.job_title}
+          </div>
+
+          {/* Body Text */}
+          <div className="space-y-3 text-zinc-700 text-[11px] leading-normal">
+            <p>Dear <span className="font-bold text-zinc-900">{offerModalCard.candidate_name}</span>,</p>
+            <p>
+              We are pleased to extend this formal offer of employment to join <span className="font-bold text-zinc-900">{offerCompanyName || "our organization"}</span> as a <span className="font-bold text-zinc-900">{offerModalCard.job_title}</span>. We were thoroughly impressed by your background, technical scorecards, and performance throughout our evaluation pipeline conducted via the <span className="font-semibold text-zinc-900">SmartHire AI Hiring Platform</span>.
+            </p>
+            <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3.5 space-y-1.5 font-mono text-[10px] text-zinc-900">
+              <div className="flex justify-between"><span>Annual Compensation:</span><span className="font-bold text-emerald-700">{offerSalary}</span></div>
+              <div className="flex justify-between"><span>Joining Date:</span><span className="font-bold">{offerJoiningDate}</span></div>
+              <div className="flex justify-between"><span>Work Location:</span><span className="font-bold">{offerLocation}</span></div>
+            </div>
+            <p>
+              This offer is subject to standard employment verification and compliance. Please review this letter and confirm your acceptance.
+            </p>
+          </div>
+
+          {/* Signatures */}
+          <div className="pt-5 border-t border-zinc-200 grid grid-cols-2 gap-6 text-[10px]">
+            <div>
+              <p className="font-bold text-zinc-900">For {offerCompanyName || "Hiring Company"}</p>
+              <div className="h-10 my-1 font-serif italic text-emerald-800 text-sm flex items-end">Authorized HR Executive</div>
+              <p className="text-zinc-500 font-semibold border-t border-zinc-300 pt-1">Hiring Manager Signature</p>
+            </div>
+            <div>
+              <p className="font-bold text-zinc-900">Candidate Acceptance</p>
+              <div className="h-10 my-1 font-serif italic text-zinc-400 text-xs flex items-end">Pending Acceptance Signature</div>
+              <p className="text-zinc-500 font-semibold border-t border-zinc-300 pt-1">{offerModalCard.candidate_name}</p>
+            </div>
+          </div>
+
+          {/* Platform Attribution Badge */}
+          <div className="pt-3 border-t border-dashed border-zinc-200 text-center text-[9px] text-zinc-400 font-medium flex items-center justify-center gap-1">
+            <span>Evaluated & Dispatched via SmartHire AI Hiring Platform</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Footer Actions */}
+    <div className="p-4 border-t border-zinc-200 bg-zinc-50 flex justify-between items-center shrink-0">
+      <button
+        type="button"
+        onClick={() => window.print()}
+        className="bg-zinc-800 hover:bg-zinc-900 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+      >
+        🖨️ Print / Download PDF
+      </button>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setOfferModalCard(null)}
+          className="px-4 py-2 text-xs font-bold text-zinc-600 hover:bg-zinc-200 rounded-xl transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={offerSending}
+          onClick={async () => {
+            setOfferSending(true);
+            try {
+              const customOfferPayload = {
+                salary: offerSalary,
+                joiningDate: offerJoiningDate,
+                location: offerLocation,
+                candidateName: offerModalCard.candidate_name,
+                jobTitle: offerModalCard.job_title,
+                sentAt: new Date().toISOString(),
+              };
+
+              localStorage.setItem(`smarthire_custom_offer_${offerModalCard.id}`, JSON.stringify(customOfferPayload));
+
+              // Update database status to offer_sent
+              await fetch(`/api/applications/${offerModalCard.id}/status`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "offer_sent" }),
+              });
+
+              // Optimistically update card status in state
+              setCards((prev) =>
+                prev.map((c) => (c.id === offerModalCard.id ? { ...c, status: "offer_sent" } : c))
+              );
+
+              alert(`✅ Official Offer Letter customized & dispatched to ${offerModalCard.candidate_email}! Candidate can now view & accept it in their portal.`);
+              setOfferModalCard(null);
+            } catch (err) {
+              logger.error("Failed to send customized offer letter", err);
+              alert("Failed to send offer letter. Please try again.");
+            } finally {
+              setOfferSending(false);
+            }
+          }}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+        >
+          {offerSending ? (
+            <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending...</>
+          ) : (
+            <>✉️ Send Offer Letter PDF</>
+          )}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+)}
+</div>
+);
 }

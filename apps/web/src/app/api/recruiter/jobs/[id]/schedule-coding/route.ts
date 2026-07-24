@@ -101,12 +101,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
     }
 
-    const { scheduledTime, assessmentId } = await request.json();
+    const { scheduledTime, assessmentId, templateFileName, durationMinutes } = await request.json();
     if (!scheduledTime) {
       return NextResponse.json({ error: "scheduledTime is required" }, { status: 400 });
     }
 
-    logger.info(`[Coding Scheduler] Recruiter ${user.id} scheduling Coding round for job ${jobId} at ${scheduledTime}`);
+    logger.info(`[Coding Scheduler] Recruiter ${user.id} scheduling Coding round for job ${jobId} at ${scheduledTime} with PDF template: ${templateFileName || "default"}`);
 
     // 2. Fetch job posting details
     const { data: job, error: jobErr } = await jobClient
@@ -121,52 +121,41 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     let finalAssessmentId = assessmentId || job.coding_assessment_id;
+    const finalDuration = durationMinutes ? Number(durationMinutes) : 30;
 
-    if (!finalAssessmentId) {
-      // Auto-resolve an existing published coding assessment template
-      const { data: existingTpl } = await assessmentClient
+    if (templateFileName || !finalAssessmentId) {
+      const qData = generateProfessionalCodingQuestion(job.title, job.description || "");
+
+      const templateTitle = `${job.title} - Coding Interview Assessment`;
+      const templateDesc = `Coding evaluation round for ${job.title}`;
+
+      const { data: newTpl } = await assessmentClient
         .from("assessments")
+        .insert({
+          company_id: job.company_id,
+          title: templateTitle,
+          description: templateDesc,
+          duration_minutes: finalDuration,
+          passing_percentage: 60,
+          status: "published",
+        })
         .select("id")
-        .eq("status", "published")
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
         .maybeSingle();
 
-      if (existingTpl) {
-        finalAssessmentId = existingTpl.id;
-      } else {
-        // Professional AI Template Generation based on Job Description & Title
-        const qData = generateProfessionalCodingQuestion(job.title, job.description || "");
+      if (newTpl) {
+        finalAssessmentId = newTpl.id;
 
-        const { data: newTpl } = await assessmentClient
-          .from("assessments")
+        await assessmentClient
+          .from("questions")
           .insert({
-            company_id: job.company_id,
-            title: qData.title,
-            description: `Professional AI-generated coding interview evaluation tailored for ${job.title}`,
-            duration_minutes: 60,
-            passing_percentage: 60,
-            status: "published",
-          })
-          .select("id")
-          .maybeSingle();
-
-        if (newTpl) {
-          finalAssessmentId = newTpl.id;
-
-          await assessmentClient
-            .from("questions")
-            .insert({
-              assessment_id: newTpl.id,
-              question_text: qData.question_text,
-              question_type: "coding",
-              points: 10,
-              difficulty: qData.difficulty,
-              category: qData.category,
-              options: qData.options,
-            });
-        }
+            assessment_id: newTpl.id,
+            question_text: qData.question_text,
+            question_type: "coding",
+            points: 10,
+            difficulty: qData.difficulty,
+            category: qData.category,
+            options: qData.options,
+          });
       }
     }
 
@@ -188,12 +177,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: `Failed to update job coding schedule: ${updJobErr.message}` }, { status: 500 });
     }
 
-    // 4. Fetch all active applications in 'coding' status
+    // 4. Fetch all active applications for this job posting
     const { data: apps, error: appsErr } = await appClient
       .from("applications")
-      .select("id, candidate_id")
+      .select("id, candidate_id, status")
       .eq("job_id", jobId)
-      .eq("status", "coding")
       .is("deleted_at", null);
 
     if (appsErr) {

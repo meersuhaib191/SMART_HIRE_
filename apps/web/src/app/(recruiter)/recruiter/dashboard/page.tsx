@@ -2,14 +2,9 @@
 
 import * as React from "react";
 import {
-
   MetricCard,
   ChartCard,
-  TaskList,
   QuickActionGrid,
-  InterviewTable,
-  ApplicationTable,
-  InsightCard,
   DashboardInterview,
   DashboardApp,
 } from "@/components/dashboard";
@@ -28,12 +23,11 @@ import { createBrowserClient } from "@supabase/ssr";
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
 
-// Supabase client
 const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 export default function RecruiterDashboardPage() {
   const [loading, setLoading] = React.useState(true);
-  const [orgName, setOrgName] = React.useState("Smart Hire Org");
+  const [orgName, setOrgName] = React.useState("SmartHire Workspace");
 
   // KPI states
   const [openJobsCount, setOpenJobsCount] = React.useState(0);
@@ -42,11 +36,7 @@ export default function RecruiterDashboardPage() {
   const [candidatesCount, setCandidatesCount] = React.useState(0);
   const [offersCount, setOffersCount] = React.useState(0);
   const [interviewsToday, setInterviewsToday] = React.useState<DashboardInterview[]>([]);
-  const [recentApps, setRecentApps] = React.useState<DashboardApp[]>([]);
-
-  // Tasks & Insights states
-  const [tasksList, setTasksList] = React.useState<{ id: string; type: "review" | "feedback" | "expiry"; content: string; dueText: string }[]>([]);
-  const [insightsList, setInsightsList] = React.useState<{ id: string; type: "top" | "warning" | "deadline"; content: string; subtext: string }[]>([]);
+  const [, setRecentApps] = React.useState<DashboardApp[]>([]);
 
   // Charts states
   const [funnelData, setFunnelData] = React.useState<{ label: string; value: number }[]>([]);
@@ -56,85 +46,236 @@ export default function RecruiterDashboardPage() {
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        // 1. Fetch Organization Details
-        const { data: companies } = await supabase.schema("organization").from("companies").select("name").limit(1).maybeSingle();
-        if (companies) setOrgName(companies.name);
+        const { data: { user } } = await supabase.auth.getUser();
+        let userCompanyId: string | null = null;
+        let userRecruiterId: string | null = null;
 
-        // 2. Fetch Jobs count
-        const { data: jobs } = await supabase.schema("job").from("jobs").select("title, status").is("deleted_at", null);
-        if (jobs) {
-          setOpenJobsCount(jobs.filter((j) => j.status === "published").length);
-          setDraftJobsCount(jobs.filter((j) => j.status === "draft").length);
-        }
+        if (user) {
+          // 1. First check local storage backup for customized company name
+          if (typeof window !== "undefined") {
+            const userProfileKey = `smarthire_active_recruiter_profile_${user.id}`;
+            const localData = localStorage.getItem(userProfileKey) || localStorage.getItem("smarthire_active_recruiter_profile");
+            if (localData) {
+              try {
+                const parsed = JSON.parse(localData);
+                if (parsed?.companyName) {
+                  setOrgName(parsed.companyName);
+                }
+              } catch (e) {
+                logger.error("Failed to parse stored profile JSON", e);
+              }
+            }
+          }
 
-        // 3. Fetch Candidates count
-        const { data: candidates } = await supabase.schema("candidate").from("candidates").select("id").is("deleted_at", null);
-        if (candidates) setCandidatesCount(candidates.length);
+          // 2. Query Database recruiter & company details
+          const { data: recruiter } = await supabase
+            .schema("organization")
+            .from("recruiters")
+            .select("id, company_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
 
-        // 4. Fetch Applications count
-        const { data: apps } = await supabase.schema("application").from("applications").select("id, candidate_id, job_id, created_at, status").is("deleted_at", null);
-        if (apps) {
-          setApplicationsCount(apps.length);
-          const activeOffers = apps.filter((a) => ["offered", "offer", "accepted", "hired"].includes(a.status?.toLowerCase())).length;
-          setOffersCount(activeOffers);
-
-          // Build recent applications
-          const latestApps = [...apps]
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-            .slice(0, 5);
-
-          // Resolve candidate names & job titles
-          if (latestApps.length > 0) {
-            const candIds = latestApps.map((a) => a.candidate_id);
-            const jIds = latestApps.map((a) => a.job_id);
-
-            const { data: profiles } = await supabase.schema("candidate").from("candidates").select("id, first_name, last_name").in("id", candIds);
-            const { data: jobListings } = await supabase.schema("job").from("jobs").select("id, title").in("id", jIds);
-
-            const mappedApps: DashboardApp[] = latestApps.map((a) => {
-              const prof = (profiles || []).find((p) => p.id === a.candidate_id);
-              const jObj = (jobListings || []).find((j) => j.id === a.job_id);
-
-              return {
-                id: a.id,
-                candidate_id: a.candidate_id,
-                candidate_name: prof ? `${prof.first_name} ${prof.last_name}` : "Jane Doe",
-                job_title: jObj ? jObj.title : "Acme opening",
-                created_at: a.created_at,
-                status: a.status,
-              };
-            });
-            setRecentApps(mappedApps);
+          if (recruiter) {
+            userRecruiterId = recruiter.id;
+            if (recruiter.company_id) {
+              userCompanyId = recruiter.company_id;
+              const { data: company } = await supabase
+                .schema("organization")
+                .from("companies")
+                .select("name")
+                .eq("id", recruiter.company_id)
+                .maybeSingle();
+              if (company?.name) {
+                setOrgName(company.name);
+              }
+            }
+          } else if (user.user_metadata?.company_name) {
+            setOrgName(user.user_metadata.company_name);
+          } else if (user.user_metadata?.first_name) {
+            setOrgName(`${user.user_metadata.first_name}'s Workspace`);
           }
         }
 
-        // 5. Fetch Today's Scheduled Interviews from interview schema
-        const { data: meetings } = await supabase.schema("interview")
+        // 3. Fetch Jobs posted by THIS recruiter / company ONLY
+        let jobsQuery = supabase.schema("job").from("jobs").select("id, title, status, company_id, recruiter_id").is("deleted_at", null);
+        if (userCompanyId) {
+          jobsQuery = jobsQuery.eq("company_id", userCompanyId);
+        } else if (userRecruiterId) {
+          jobsQuery = jobsQuery.eq("recruiter_id", userRecruiterId);
+        }
+
+        const { data: jobs } = await jobsQuery;
+        const recruiterJobs = jobs || [];
+
+        if (recruiterJobs.length > 0) {
+          setOpenJobsCount(recruiterJobs.filter((j) => j.status === "published").length);
+          setDraftJobsCount(recruiterJobs.filter((j) => j.status === "draft").length);
+
+          const recruiterJobIds = recruiterJobs.map((j) => j.id);
+
+          // 4. Fetch Applications ONLY for THIS recruiter's jobs
+          const { data: apps } = await supabase
+            .schema("application")
+            .from("applications")
+            .select("id, candidate_id, job_id, created_at, status")
+            .in("job_id", recruiterJobIds)
+            .is("deleted_at", null);
+
+          const recruiterApps = apps || [];
+
+          if (recruiterApps.length > 0) {
+            setApplicationsCount(recruiterApps.length);
+            const uniqueCandidates = new Set(recruiterApps.map((a) => a.candidate_id));
+            setCandidatesCount(uniqueCandidates.size);
+
+            const activeOffers = recruiterApps.filter((a) =>
+              ["offered", "offer", "accepted", "hired"].includes(a.status?.toLowerCase())
+            ).length;
+            setOffersCount(activeOffers);
+
+            // Compute Funnel & Trend ONLY for this recruiter's job applications
+            const appliedCount = recruiterApps.length;
+            const screeningCount = recruiterApps.filter((a) =>
+              ["screening", "mcq", "coding", "interview", "zoom_interview", "offered", "offer", "accepted", "hired"].includes(a.status?.toLowerCase())
+            ).length;
+            const interviewCount = recruiterApps.filter((a) =>
+              ["interview", "zoom_interview", "offered", "offer", "accepted", "hired"].includes(a.status?.toLowerCase())
+            ).length;
+            const offerCount = activeOffers;
+
+            setFunnelData([
+              { label: "Applied", value: appliedCount },
+              { label: "Screening", value: screeningCount },
+              { label: "Interview", value: interviewCount },
+              { label: "Offer", value: offerCount },
+            ]);
+
+            const last30Days = Array.from({ length: 30 }, (_, i) => {
+              const d = new Date();
+              d.setDate(d.getDate() - (29 - i));
+              return d.toISOString().split("T")[0];
+            });
+
+            const formattedTrend = last30Days.map((dateStr) => {
+              const count = recruiterApps.filter(
+                (a) => a.created_at && a.created_at.startsWith(dateStr)
+              ).length;
+              const label = new Date(dateStr).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+              });
+              return { label, value: count };
+            });
+            setTrendData(formattedTrend);
+
+            // Build recent applications table for this recruiter
+            const latestApps = [...recruiterApps]
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+              .slice(0, 5);
+
+            if (latestApps.length > 0) {
+              const candIds = latestApps.map((a) => a.candidate_id);
+              const jIds = latestApps.map((a) => a.job_id);
+
+              const { data: profiles } = await supabase
+                .schema("candidate")
+                .from("candidates")
+                .select("id, first_name, last_name")
+                .in("id", candIds);
+              const { data: jobListings } = await supabase
+                .schema("job")
+                .from("jobs")
+                .select("id, title")
+                .in("id", jIds);
+
+              const mappedApps: DashboardApp[] = latestApps.map((a) => {
+                const prof = (profiles || []).find((p) => p.id === a.candidate_id);
+                const jObj = (jobListings || []).find((j) => j.id === a.job_id);
+
+                return {
+                  id: a.id,
+                  candidate_id: a.candidate_id,
+                  candidate_name: prof ? `${prof.first_name} ${prof.last_name}` : "Candidate",
+                  job_title: jObj ? jObj.title : "Technical Position",
+                  created_at: a.created_at,
+                  status: a.status,
+                };
+              });
+              setRecentApps(mappedApps);
+            }
+          } else {
+            // Recruiter has jobs but zero applications
+            setApplicationsCount(0);
+            setCandidatesCount(0);
+            setOffersCount(0);
+            setFunnelData([
+              { label: "Applied", value: 0 },
+              { label: "Screening", value: 0 },
+              { label: "Interview", value: 0 },
+              { label: "Offer", value: 0 },
+            ]);
+            setTrendData([]);
+          }
+        } else {
+          // Recruiter has 0 jobs
+          setOpenJobsCount(0);
+          setDraftJobsCount(0);
+          setApplicationsCount(0);
+          setCandidatesCount(0);
+          setOffersCount(0);
+          setFunnelData([
+            { label: "Applied", value: 0 },
+            { label: "Screening", value: 0 },
+            { label: "Interview", value: 0 },
+            { label: "Offer", value: 0 },
+          ]);
+          setTrendData([]);
+        }
+
+        // 5. Fetch Today's Scheduled Interviews for THIS recruiter's applications only
+        const { data: meetings } = await supabase
+          .schema("interview")
           .from("interviews")
           .select("id, interview_type, status, scheduled_at, duration_minutes, meeting_link, application_id")
           .order("scheduled_at", { ascending: true });
 
-        if (meetings && meetings.length > 0) {
-          // Resolve matching application candidate names & job titles
+        if (meetings && meetings.length > 0 && recruiterJobs.length > 0) {
+          const recruiterJobIds = recruiterJobs.map((j) => j.id);
           const appIds = meetings.map((m) => m.application_id);
-          const { data: appRecords } = await supabase.schema("application").from("applications").select("id, candidate_id, job_id").in("id", appIds);
+          const { data: appRecords } = await supabase
+            .schema("application")
+            .from("applications")
+            .select("id, candidate_id, job_id")
+            .in("id", appIds)
+            .in("job_id", recruiterJobIds);
 
           if (appRecords && appRecords.length > 0) {
+            const validAppIds = new Set(appRecords.map((a) => a.id));
+            const filteredMeetings = meetings.filter((m) => validAppIds.has(m.application_id));
+
             const candIds = appRecords.map((a) => a.candidate_id);
             const jIds = appRecords.map((a) => a.job_id);
 
-            const { data: profiles } = await supabase.schema("candidate").from("candidates").select("id, first_name, last_name").in("id", candIds);
-            const { data: jobListings } = await supabase.schema("job").from("jobs").select("id, title").in("id", jIds);
+            const { data: profiles } = await supabase
+              .schema("candidate")
+              .from("candidates")
+              .select("id, first_name, last_name")
+              .in("id", candIds);
+            const { data: jobListings } = await supabase
+              .schema("job")
+              .from("jobs")
+              .select("id, title")
+              .in("id", jIds);
 
-            const mappedInterviews: DashboardInterview[] = meetings.map((meet) => {
+            const mappedInterviews: DashboardInterview[] = filteredMeetings.map((meet) => {
               const matchingApp = appRecords.find((a) => a.id === meet.application_id);
               const prof = matchingApp ? (profiles || []).find((p) => p.id === matchingApp.candidate_id) : null;
               const jObj = matchingApp ? (jobListings || []).find((j) => j.id === matchingApp.job_id) : null;
 
               return {
                 id: meet.id,
-                candidate_name: prof ? `${prof.first_name} ${prof.last_name}` : "Applicant Loop",
-                job_title: jObj ? jObj.title : "Technical opening",
+                candidate_name: prof ? `${prof.first_name} ${prof.last_name}` : "Applicant",
+                job_title: jObj ? jObj.title : "Opening",
                 scheduled_at: meet.scheduled_at,
                 interview_type: meet.interview_type,
                 meeting_link: meet.meeting_link,
@@ -144,122 +285,6 @@ export default function RecruiterDashboardPage() {
             setInterviewsToday(mappedInterviews.slice(0, 5));
           }
         }
-
-        // 6. Compute Real Funnel & Trend Data
-        const appliedCount = apps ? apps.length : 0;
-        const screeningCount = apps ? apps.filter((a) => ["screening", "interview", "interviewing", "offered", "offer", "accepted", "hired"].includes(a.status?.toLowerCase())).length : 0;
-        const interviewCount = apps ? apps.filter((a) => ["interview", "interviewing", "offered", "offer", "accepted", "hired"].includes(a.status?.toLowerCase())).length : 0;
-        const offerCount = apps ? apps.filter((a) => ["offered", "offer", "accepted", "hired"].includes(a.status?.toLowerCase())).length : 0;
-
-        setFunnelData([
-          { label: "Applied", value: appliedCount },
-          { label: "Screening", value: screeningCount },
-          { label: "Interview", value: interviewCount },
-          { label: "Offer", value: offerCount }
-        ]);
-
-        const last30Days = Array.from({ length: 30 }, (_, i) => {
-          const d = new Date();
-          d.setDate(d.getDate() - (29 - i));
-          return d.toISOString().split("T")[0];
-        });
-
-        const formattedTrend = last30Days.map(dateStr => {
-          const count = apps ? apps.filter((a) => a.created_at && a.created_at.startsWith(dateStr)).length : 0;
-          const label = new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-          return { label, value: count };
-        });
-        setTrendData(formattedTrend);
-
-        // 7. Compute Dynamic Tasks
-        const dynamicTasks = [];
-        const newApps = apps ? apps.filter((a) => a.status === "applied").length : 0;
-        if (newApps > 0) {
-          dynamicTasks.push({
-            id: "task-1",
-            type: "review" as const,
-            content: `Review ${newApps} new application profile${newApps > 1 ? "s" : ""}`,
-            dueText: "Action Needed",
-          });
-        }
-
-        const draftJobs = jobs ? jobs.filter((j) => j.status === "draft") : [];
-        if (draftJobs.length > 0) {
-          dynamicTasks.push({
-            id: "task-2",
-            type: "expiry" as const,
-            content: `Complete draft position: "${draftJobs[0].title || "Untitled"}"`,
-            dueText: "Draft",
-          });
-        }
-
-        const interviewsCount = meetings ? meetings.length : 0;
-        if (interviewsCount > 0) {
-          dynamicTasks.push({
-            id: "task-3",
-            type: "feedback" as const,
-            content: `Prepare for ${interviewsCount} scheduled interview${interviewsCount > 1 ? "s" : ""}`,
-            dueText: "Scheduled",
-          });
-        }
-
-        if (dynamicTasks.length === 0) {
-          dynamicTasks.push({
-            id: "task-f1",
-            type: "review" as const,
-            content: "No immediate reviews pending",
-            dueText: "Up to date",
-          });
-        }
-        setTasksList(dynamicTasks);
-
-        // 8. Compute Dynamic Insights
-        const dynamicInsights = [];
-        const tenDaysAgo = new Date();
-        tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
-        const delayedApps = apps
-          ? apps.filter((a) => a.status === "screening" && new Date(a.created_at) < tenDaysAgo).length
-          : 0;
-
-        if (delayedApps > 0) {
-          dynamicInsights.push({
-            id: "ins-1",
-            type: "warning" as const,
-            content: "Candidates waiting too long",
-            subtext: `${delayedApps} applicant${delayedApps > 1 ? "s have" : " has"} spent > 10 days in Screening Stage.`,
-          });
-        }
-
-        const totalActiveJobs = jobs ? jobs.filter((j) => j.status === "published").length : 0;
-        if (totalActiveJobs > 0) {
-          dynamicInsights.push({
-            id: "ins-2",
-            type: "top" as const,
-            content: "Active Recruitment",
-            subtext: `Active sourcing for ${totalActiveJobs} open position${totalActiveJobs > 1 ? "s" : ""}.`,
-          });
-        }
-
-        const totalCands = candidates ? candidates.length : 0;
-        if (totalCands > 0) {
-          dynamicInsights.push({
-            id: "ins-3",
-            type: "deadline" as const,
-            content: "Directory Growth",
-            subtext: `${totalCands} unique candidate profiles are available in your directory.`,
-          });
-        }
-
-        if (dynamicInsights.length === 0) {
-          dynamicInsights.push({
-            id: "ins-f1",
-            type: "top" as const,
-            content: "Welcome to Smart Hire",
-            subtext: "Start posting jobs to view real-time recruitment insights.",
-          });
-        }
-        setInsightsList(dynamicInsights);
-
       } catch (err) {
         logger.error("Failed to load recruiter dashboard aggregate statistics", err);
       } finally {
@@ -313,21 +338,6 @@ export default function RecruiterDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard title="Active Recruiter Funnel" type="funnel" data={funnelData} />
         <ChartCard title="Applications Growth (Last 30 Days)" type="trend" data={trendData} />
-      </div>
-
-      {/* Tables & Tasks Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left tables */}
-        <div className="lg:col-span-8 space-y-6">
-          <InterviewTable interviews={interviewsToday} />
-          <ApplicationTable applications={recentApps} />
-        </div>
-
-        {/* Right side checklists and AI insights */}
-        <div className="lg:col-span-4 space-y-6">
-          <TaskList tasks={tasksList} />
-          <InsightCard insights={insightsList} />
-        </div>
       </div>
     </div>
   );

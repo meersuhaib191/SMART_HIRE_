@@ -25,8 +25,8 @@ export async function POST(request: Request) {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
+        setAll(cookiesToSet: any[]) {
+          cookiesToSet.forEach(({ name, value, options }: any) => {
             try {
               cookieStore.set(name, value, options);
             } catch {

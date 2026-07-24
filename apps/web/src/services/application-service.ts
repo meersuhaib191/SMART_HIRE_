@@ -76,23 +76,27 @@ export const applicationService = {
       throw new Error("Application not found");
     }
 
-    const { status, notes } = result.data;
+    const { status, notes, rejection_stage } = result.data;
     const fromStatus = existing.status;
 
-    if (fromStatus === status) {
+    if (fromStatus === status && existing.rejection_stage === rejection_stage) {
       return existing; // No status change required
     }
 
-    const updatedApp = await applicationRepository.updateApplicationStatus(applicationId, status);
+    const updatedApp = await applicationRepository.updateApplicationStatus(applicationId, status, rejection_stage);
 
-    // Append Status History log with recruiter notes
-    await applicationRepository.insertStatusHistory({
-      applicationId,
-      fromStatus,
-      toStatus: status,
-      notes: notes || "Recruiter status update",
-      changedBy: recruiterUserId,
-    });
+    // Append Status History log with recruiter notes (non-blocking if history table error)
+    try {
+      await applicationRepository.insertStatusHistory({
+        applicationId,
+        fromStatus,
+        toStatus: status,
+        notes: notes || "Recruiter status update",
+        changedBy: recruiterUserId,
+      });
+    } catch (histErr) {
+      logger.warn(`[applicationService] Status history log skipped: ${histErr}`);
+    }
 
     // Check status type and Publish appropriate Event
     if (status === "rejected") {

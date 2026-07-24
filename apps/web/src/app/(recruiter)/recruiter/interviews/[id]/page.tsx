@@ -1,12 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { Button } from "@smarthire/ui";
 import {
-  Video, ShieldCheck, AlertTriangle, CheckCircle2,
-  Clock, Award, BookOpen, Star, FileText, User,
-  Loader2, ArrowLeft, Check, Sparkles, MessageSquare
+  ShieldCheck, CheckCircle2,
+  Award, Loader2, ArrowLeft, Check, Sparkles, MessageSquare, AlertCircle
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 import { logger } from "@smarthire/logger";
@@ -56,7 +55,6 @@ interface InterviewDetails {
 
 export default function InterviewSupervisionPortalPage() {
   const params = useParams();
-  const router = useRouter();
   const interviewId = params?.id as string;
 
   const [details, setDetails] = React.useState<InterviewDetails | null>(null);

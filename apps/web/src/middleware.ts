@@ -14,31 +14,40 @@ export async function middleware(request: NextRequest) {
   // Protect Admin dashboard routes
   if (pathname.startsWith("/admin")) {
     if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-    if (role !== "platform-admin") {
-      return NextResponse.redirect(new URL("/", request.url)); // Access Denied redirect
+      return NextResponse.redirect(
+        new URL(`/login?redirectTo=${encodeURIComponent(pathname)}`, request.url)
+      );
     }
   }
 
   // Protect Recruiter & Company routes
   if (pathname.startsWith("/recruiter") || pathname.startsWith("/company")) {
     if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-    if (role !== "recruiter" && role !== "company-admin" && role !== "platform-admin") {
-      return NextResponse.redirect(new URL("/", request.url));
+      return NextResponse.redirect(
+        new URL(`/login?redirectTo=${encodeURIComponent(pathname)}`, request.url)
+      );
     }
   }
 
-  // Protect Candidate dashboard / profile routes
-  if (pathname.startsWith("/candidate")) {
+  // Protect Candidate private routes (dashboard, applications, profile, assessments, interviews)
+  // Public job listings (/candidate/jobs and /candidate/jobs/[id]) are accessible without login
+  if (
+    pathname.startsWith("/candidate") &&
+    !pathname.startsWith("/candidate/jobs")
+  ) {
     if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(
+        new URL(`/login?redirectTo=${encodeURIComponent(pathname)}`, request.url)
+      );
     }
-    if (role !== "candidate" && role !== "platform-admin") {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
+  }
+
+  // If user is already authenticated and visits /login or /register, redirect to their role dashboard
+  if ((pathname === "/login" || pathname === "/register") && user) {
+    let target = "/candidate/dashboard";
+    if (role === "platform-admin") target = "/admin/system";
+    else if (role === "recruiter" || role === "company-admin") target = "/recruiter/jobs";
+    return NextResponse.redirect(new URL(target, request.url));
   }
 
   return supabaseResponse;
@@ -51,5 +60,7 @@ export const config = {
     "/recruiter/:path*",
     "/company/:path*",
     "/candidate/:path*",
+    "/login",
+    "/register",
   ],
 };

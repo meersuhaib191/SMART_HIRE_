@@ -255,14 +255,16 @@ export const AssessmentService = {
     const categoryEarnedPoints: Record<string, number> = {};
     const categoryMaxPoints: Record<string, number> = {};
 
-    for (const q of template.questions) {
+    for (let qIdx = 0; qIdx < template.questions.length; qIdx++) {
+      const q: any = template.questions[qIdx];
       totalPointsPossible += q.points;
       const category = q.category || "custom";
 
       categoryMaxPoints[category] = (categoryMaxPoints[category] || 0) + q.points;
       categoryEarnedPoints[category] = categoryEarnedPoints[category] || 0;
 
-      const candidateAns = finalAnswers[q.id];
+      // Resolve answer: try real UUID first, then positional fallback key "q-{n}" used by DEFAULT_10_QUESTIONS
+      const candidateAns = finalAnswers[q.id] ?? finalAnswers[`q-${qIdx + 1}`];
       let correct = false;
       let pointsEarned = 0;
 

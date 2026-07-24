@@ -16,6 +16,9 @@
     "test:assessment": "pnpm --filter web test:assessment",
     "test:interview": "pnpm --filter web test:interview"
   },
+  "dependencies": {
+    "next": "^15.1.7"
+  },
   "devDependencies": {
     "@eslint/js": "^9.16.0",
     "eslint": "^9.16.0",

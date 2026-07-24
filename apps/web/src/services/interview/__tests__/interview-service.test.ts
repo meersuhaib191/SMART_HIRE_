@@ -103,7 +103,7 @@ interviewRepository.getInterviewById = async (id) => {
   return null;
 };
 
-interviewRepository.updateInterview = async (id, data) => {
+interviewRepository.updateInterview = async (_id, data) => {
   return {
     ...mockInterview,
     ...data,

@@ -10,6 +10,10 @@ import {
   Loader2,
   ArrowUpRight,
   TrendingUp,
+  Briefcase,
+  Play,
+  Clock,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@smarthire/ui";
 import { logger } from "@smarthire/logger";
@@ -18,7 +22,6 @@ import { createBrowserClient } from "@supabase/ssr";
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
 
-// Supabase client
 const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 interface RecommendedJob {
@@ -41,6 +44,7 @@ interface RecentInterview {
   scheduled_at: string;
   duration_minutes: number;
   meeting_link?: string;
+  job_title?: string;
 }
 
 export default function CandidateDashboardPage() {
@@ -48,7 +52,7 @@ export default function CandidateDashboardPage() {
   const [candidateName, setCandidateName] = React.useState("Candidate User");
 
   // Stats Counters
-  const [profilePercent, setProfilePercent] = React.useState(60); // base completion
+  const [profilePercent, setProfilePercent] = React.useState(60);
   const [activeAppsCount, setActiveAppsCount] = React.useState(0);
   const [examsCount, setExamsCount] = React.useState(0);
   const [interviewsCount, setInterviewsCount] = React.useState(0);
@@ -62,7 +66,6 @@ export default function CandidateDashboardPage() {
     const fetchDashboardMetrics = async () => {
       setLoading(true);
       try {
-        // 1. Fetch Candidate Profile metadata
         const { data: cand } = await supabase
           .schema("candidate")
           .from("candidates")
@@ -73,7 +76,6 @@ export default function CandidateDashboardPage() {
         if (cand) {
           setCandidateName(`${cand.first_name} ${cand.last_name}`);
 
-          // Calculate profile percentage from education/experience records count
           const { data: edu } = await supabase.schema("candidate").from("education").select("id").eq("candidate_id", cand.id);
           const { data: exp } = await supabase.schema("candidate").from("experience").select("id").eq("candidate_id", cand.id);
 
@@ -82,7 +84,6 @@ export default function CandidateDashboardPage() {
           const calculatedPercent = Math.min(100, 40 + eduCount * 20 + expCount * 20);
           setProfilePercent(calculatedPercent);
 
-          // 2. Fetch Active Applications
           const { data: apps } = await supabase
             .schema("application")
             .from("applications")
@@ -93,7 +94,6 @@ export default function CandidateDashboardPage() {
           if (apps) {
             setActiveAppsCount(apps.length);
 
-            // Fetch Job details
             const jobIds = apps.map((a) => a.job_id);
             if (jobIds.length > 0) {
               const { data: jobs } = await supabase.schema("job").from("jobs").select("id, title").in("id", jobIds);
@@ -111,7 +111,6 @@ export default function CandidateDashboardPage() {
             }
           }
 
-          // 3. Fetch Assigned Exam Attempts
           const { data: attempts } = await supabase
             .schema("assessment")
             .from("attempts")
@@ -119,16 +118,40 @@ export default function CandidateDashboardPage() {
             .eq("candidate_id", cand.id);
           if (attempts) setExamsCount(attempts.length);
 
-          // 4. Fetch Scheduled Interview loops
           const { data: interviews } = await supabase
             .schema("interview")
             .from("interviews")
-            .select("id, interview_type, scheduled_at, duration_minutes, meeting_link")
+            .select("id, interview_type, scheduled_at, duration_minutes, meeting_link, application_id")
             .order("scheduled_at", { ascending: true });
 
-          if (interviews) {
+          if (interviews && interviews.length > 0) {
             setInterviewsCount(interviews.length);
-            setRecentInterviews(interviews.slice(0, 3));
+            const appIds = interviews.map((m) => m.application_id);
+            const { data: apps } = await supabase.schema("application").from("applications").select("id, job_id").in("id", appIds);
+
+            let jobsList: { id: string; title: string }[] = [];
+            if (apps && apps.length > 0) {
+              const jIds = apps.map((a) => a.job_id);
+              const { data: jobs } = await supabase.schema("job").from("jobs").select("id, title").in("id", jIds);
+              jobsList = jobs || [];
+            }
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const mapped: RecentInterview[] = interviews.map((meet: any) => {
+              const app = (apps || []).find((a) => a.id === meet.application_id);
+              const job = app ? jobsList.find((j) => j.id === app.job_id) : null;
+              return {
+                id: meet.id,
+                interview_type: meet.type || meet.interview_type || "Technical",
+                scheduled_at: meet.start_time || meet.scheduled_at || new Date().toISOString(),
+                duration_minutes: meet.duration_minutes || 60,
+                meeting_link: meet.meeting_link,
+                job_title: job ? job.title : "Technical Position",
+              };
+            });
+            setRecentInterviews(mapped.slice(0, 5));
+          } else {
+            setRecentInterviews([]);
           }
         }
 
@@ -160,32 +183,33 @@ export default function CandidateDashboardPage() {
   }, []);
 
   const stats = [
-    { label: "Profile Completion", value: `${profilePercent}%`, icon: UserCheck, color: "text-blue-500 bg-blue-500/10 border-blue-500/20" },
-    { label: "My Applications", value: activeAppsCount, icon: FileSpreadsheet, color: "text-purple-500 bg-purple-500/10 border-purple-500/20" },
-    { label: "Pending Assessments", value: examsCount, icon: ClipboardCheck, color: "text-yellow-500 bg-yellow-500/10 border-yellow-500/20" },
-    { label: "Scheduled Interviews", value: interviewsCount, icon: Calendar, color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" },
+    { label: "Profile Specs", value: `${profilePercent}%`, icon: UserCheck, color: "text-blue-600 bg-blue-50 border-blue-100" },
+    { label: "Active Applications", value: activeAppsCount, icon: FileSpreadsheet, color: "text-purple-600 bg-purple-50 border-purple-100" },
+    { label: "Passed Assessments", value: examsCount, icon: ClipboardCheck, color: "text-amber-600 bg-amber-50 border-amber-100" },
+    { label: "Scheduled Interviews", value: interviewsCount, icon: Calendar, color: "text-emerald-600 bg-emerald-50 border-emerald-100" },
   ];
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <p className="text-sm text-zinc-500 font-medium">Loading candidate dashboard...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 text-left animate-in fade-in duration-200">
+    <div className="max-w-5xl mx-auto py-8 px-4 space-y-8 text-left animate-in fade-in duration-200">
       {/* Welcome Header */}
-      <div>
-        <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider block">
+      <div className="space-y-1">
+        <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest block">
           Candidate Hub
         </span>
-        <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 mt-1">
-          Hello, {candidateName}
+        <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
+          Welcome back, {candidateName}!
         </h1>
-        <p className="text-sm text-zinc-800 mt-1">
-          Review your assessment invites, follow active pipelines, or upload your resume profile.
+        <p className="text-sm text-zinc-500 font-medium">
+          Track stage progression milestones, scheduled assessment exam entries, and live interview rooms.
         </p>
       </div>
 
@@ -197,18 +221,18 @@ export default function CandidateDashboardPage() {
           return (
             <div
               key={idx}
-              className="rounded-xl border border-zinc-200 bg-white p-4 flex items-center gap-3.5 shadow-sm"
+              className={`rounded-2xl border p-5 flex items-center gap-4 bg-white shadow-sm hover:shadow-md transition-all duration-200 ${stat.color.split(" ").slice(1).join(" ")}`}
             >
-              <div className={`h-9 w-9 rounded-xl border flex items-center justify-center shrink-0 ${stat.color}`}>
-                <Icon className="h-4.5 w-4.5" />
+              <div className={`h-11 w-11 rounded-xl border flex items-center justify-center shrink-0 ${stat.color.split(" ")[0]} ${stat.color.split(" ")[1]}`}>
+                <Icon className="h-5 w-5" />
               </div>
               <div>
-                <span className="text-[10px] font-bold text-zinc-700 uppercase tracking-wider block">
-                  {stat.label}
-                </span>
-                <span className="text-xl font-extrabold text-zinc-900 mt-0.5 block tracking-tight">
+                <p className="text-2xl font-extrabold text-zinc-900 tracking-tight tabular-nums">
                   {stat.value}
-                </span>
+                </p>
+                <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mt-0.5">
+                  {stat.label}
+                </p>
               </div>
             </div>
           );
@@ -220,33 +244,34 @@ export default function CandidateDashboardPage() {
         {/* Left column tables */}
         <div className="lg:col-span-8 space-y-6">
           {/* Recent Applications */}
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-zinc-100 pb-2.5">
-              <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">
-                My Recent Job Applications
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 space-y-4 shadow-sm">
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
+              <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-blue-600" />
+                Recent Applications
               </h3>
-              <Link href="/candidate/applications" className="text-xs text-blue-500 hover:underline">
-                View All
+              <Link href="/candidate/applications" className="text-xs font-bold text-blue-600 hover:text-blue-700">
+                View All →
               </Link>
             </div>
             <div className="space-y-3">
               {recentApps.map((app) => (
                 <div
                   key={app.id}
-                  className="flex items-center justify-between p-3.5 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-left"
+                  className="flex items-center justify-between p-4 bg-zinc-50/70 rounded-xl border border-zinc-200/80 text-xs text-left hover:border-zinc-300 transition-colors"
                 >
                   <div>
-                    <h4 className="font-bold text-zinc-900">{app.job_title}</h4>
-                    <p className="text-[10px] text-zinc-700 mt-0.5">Applied {new Date(app.created_at).toLocaleDateString()}</p>
+                    <h4 className="font-bold text-zinc-900 text-sm">{app.job_title}</h4>
+                    <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Applied {new Date(app.created_at).toLocaleDateString([], { dateStyle: "medium" })}</p>
                   </div>
-                  <span className="inline-flex items-center rounded-full bg-blue-500/10 px-2 py-0.5 text-[9px] font-semibold text-blue-500 capitalize border border-blue-500/20">
+                  <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-[10px] font-bold text-blue-700 capitalize">
                     {app.status}
                   </span>
                 </div>
               ))}
 
               {recentApps.length === 0 && (
-                <div className="text-center py-6 text-zinc-700 italic text-xs">
+                <div className="text-center py-6 text-zinc-500 italic text-xs">
                   No applications sent yet. Search active roles to get started.
                 </div>
               )}
@@ -254,49 +279,69 @@ export default function CandidateDashboardPage() {
           </div>
 
           {/* Upcoming interview list */}
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-zinc-100 pb-2.5">
-              <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 space-y-4 shadow-sm">
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
+              <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-purple-600" />
                 Upcoming Live Interviews
               </h3>
-              <Link href="/candidate/interviews" className="text-xs text-blue-500 hover:underline">
-                View Lobbies
+              <Link href="/candidate/interviews" className="text-xs font-bold text-purple-600 hover:text-purple-700">
+                View All Lobbies →
               </Link>
             </div>
-            <div className="space-y-3">
-              {recentInterviews.map((int) => (
-                <div
-                  key={int.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-left"
-                >
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-zinc-900 capitalize">{int.interview_type.replace("-", " ")} Session</h4>
-                    <div className="flex items-center gap-2 text-[10px] text-zinc-700">
-                      <span>{new Date(int.scheduled_at).toLocaleString()}</span>
-                      <span>â€¢</span>
-                      <span>{int.duration_minutes} mins</span>
+            <div className="space-y-4">
+              {(() => {
+                const grouped: Record<string, RecentInterview[]> = {};
+                recentInterviews.forEach((int) => {
+                  const title = int.job_title || "Technical Position";
+                  if (!grouped[title]) grouped[title] = [];
+                  grouped[title].push(int);
+                });
+                const titles = Object.keys(grouped);
+
+                if (titles.length === 0) {
+                  return (
+                    <div className="text-center py-6 text-zinc-500 italic text-xs">
+                      No interview sessions scheduled for today.
+                    </div>
+                  );
+                }
+
+                return titles.map((jobTitle) => (
+                  <div key={jobTitle} className="space-y-2.5">
+                    <div className="flex items-center justify-between bg-zinc-50 px-3.5 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-800">
+                      <span>{jobTitle}</span>
+                      <span className="text-[10px] bg-white px-2.5 py-0.5 rounded-full border border-zinc-200 font-bold text-zinc-600">
+                        {grouped[jobTitle].length} {grouped[jobTitle].length === 1 ? "Session" : "Sessions"}
+                      </span>
+                    </div>
+                    <div className="space-y-2 pl-1">
+                      {grouped[jobTitle].map((int) => (
+                        <div
+                          key={int.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white rounded-xl border border-zinc-200 text-xs text-left hover:border-zinc-300 transition-colors shadow-sm"
+                        >
+                          <div className="space-y-1">
+                            <h4 className="font-bold text-zinc-900 capitalize text-sm">{int.interview_type.replace("-", " ")} Session</h4>
+                            <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-medium">
+                              <Clock className="h-3.5 w-3.5 text-blue-600" />
+                              <span>{new Date(int.scheduled_at).toLocaleString([], { dateStyle: "long", timeStyle: "short" })}</span>
+                              <span>•</span>
+                              <span>{int.duration_minutes} mins</span>
+                            </div>
+                          </div>
+                          <a
+                            href={`/candidate/interview/${int.id}/room`}
+                            className="inline-flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl px-4 py-2 text-xs font-bold shadow-sm shrink-0"
+                          >
+                            <Play className="h-3.5 w-3.5" /> Enter Video Lobby
+                          </a>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  {int.meeting_link ? (
-                    <a
-                      href={int.meeting_link}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-1.5 text-[10px] font-bold shadow-sm"
-                    >
-                      Join Meeting
-                    </a>
-                  ) : (
-                    <span className="text-[10px] text-zinc-700 italic">No link</span>
-                  )}
-                </div>
-              ))}
-
-              {recentInterviews.length === 0 && (
-                <div className="text-center py-6 text-zinc-700 italic text-xs">
-                  No interview sessions scheduled for today.
-                </div>
-              )}
+                ));
+              })()}
             </div>
           </div>
         </div>
@@ -304,46 +349,48 @@ export default function CandidateDashboardPage() {
         {/* Right column sidebar */}
         <div className="lg:col-span-4 space-y-6">
           {/* Quick Actions */}
-          <div className="rounded-xl border border-zinc-200 bg-white p-5 space-y-4 text-left">
-            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 text-left shadow-sm">
+            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-blue-600" />
               Quick Shortcuts
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <Link href="/candidate/profile" className="block">
-                <Button className="w-full bg-zinc-50 border border-zinc-200 hover:bg-zinc-100 text-zinc-800 justify-between flex items-center h-10 px-4 text-xs font-semibold rounded-lg">
-                  Update Profile Specs <ArrowUpRight className="h-4 w-4" />
+                <Button className="w-full bg-zinc-50 border border-zinc-200 hover:bg-zinc-100 text-zinc-800 justify-between flex items-center h-10 px-4 text-xs font-bold rounded-xl cursor-pointer">
+                  Update Profile Specs <ArrowUpRight className="h-4 w-4 text-zinc-500" />
                 </Button>
               </Link>
-              <Link href="/candidate/resume" className="block">
-                <Button className="w-full bg-zinc-50 border border-zinc-200 hover:bg-zinc-100 text-zinc-800 justify-between flex items-center h-10 px-4 text-xs font-semibold rounded-lg">
-                  Upload Resume PDF <ArrowUpRight className="h-4 w-4" />
+              <Link href="/candidate/assessments" className="block">
+                <Button className="w-full bg-zinc-50 border border-zinc-200 hover:bg-zinc-100 text-zinc-800 justify-between flex items-center h-10 px-4 text-xs font-bold rounded-xl cursor-pointer">
+                  View Assessments <ArrowUpRight className="h-4 w-4 text-zinc-500" />
                 </Button>
               </Link>
               <Link href="/candidate/jobs" className="block">
-                <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white justify-between flex items-center h-10 px-4 text-xs font-bold rounded-lg shadow-sm">
-                  Search Open Jobs <ArrowUpRight className="h-4 w-4 text-white" />
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white justify-between flex items-center h-10 px-4 text-xs font-bold rounded-xl shadow-sm cursor-pointer">
+                  Browse Open Roles <ArrowUpRight className="h-4 w-4 text-white" />
                 </Button>
               </Link>
             </div>
           </div>
 
           {/* Recommended Jobs */}
-          <div className="rounded-xl border border-zinc-200 bg-white p-5 space-y-4 text-left">
-            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-1">
-              <TrendingUp className="h-4 w-4 text-blue-500" /> Suggested Job Openings
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 text-left shadow-sm">
+            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
+              Suggested Job Openings
             </h3>
-            <div className="space-y-3 text-xs">
+            <div className="space-y-3.5 text-xs">
               {recommendedJobs.map((job) => (
-                <div key={job.id} className="border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
-                  <Link href={`/candidate/jobs/${job.id}`} className="font-bold text-zinc-800 hover:text-blue-500 block truncate">
+                <div key={job.id} className="border-b border-zinc-100 pb-3 last:border-0 last:pb-0">
+                  <Link href={`/candidate/jobs/${job.id}`} className="font-bold text-zinc-900 hover:text-blue-600 block truncate text-sm">
                     {job.title}
                   </Link>
-                  <span className="text-[10px] text-zinc-700 capitalize">{job.department} â€¢ {job.location}</span>
+                  <span className="text-[11px] text-zinc-500 font-medium capitalize">{job.department} • {job.location}</span>
                 </div>
               ))}
 
               {recommendedJobs.length === 0 && (
-                <div className="text-zinc-700 italic text-xs">No active positions found.</div>
+                <div className="text-zinc-500 italic text-xs">No active positions found.</div>
               )}
             </div>
           </div>
@@ -352,3 +399,4 @@ export default function CandidateDashboardPage() {
     </div>
   );
 }
+

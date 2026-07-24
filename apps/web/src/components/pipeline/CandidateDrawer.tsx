@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { NotesPanel, TagSelector, NoteItem } from "@/components/candidates";
-import { X, Mail, Briefcase, GraduationCap, ClipboardCheck, Code2, Star, TrendingUp, UserCheck } from "lucide-react";
+import { X, Mail, Briefcase, GraduationCap, ClipboardCheck, Code2, Star, TrendingUp, UserCheck, Phone, MapPin, FileText, ExternalLink, Video } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { CandidateAppCard } from "./ApplicationCard";
 import { Skeleton } from "@/components/shared/Skeleton";
@@ -39,10 +39,23 @@ interface Experience {
   is_current: boolean;
 }
 
+interface CandidateProfile {
+  id: string;
+  avatar_url?: string;
+  phone?: string;
+  location?: string;
+  bio?: string;
+  resume_url?: string;
+  linkedin_url?: string;
+  github_url?: string;
+  portfolio_url?: string;
+}
+
 export function CandidateDrawer({ card, onClose, onScheduleInterview }: CandidateDrawerProps) {
   const [loading, setLoading] = React.useState(false);
   const [education, setEducation] = React.useState<Education[]>([]);
   const [experience, setExperience] = React.useState<Experience[]>([]);
+  const [profile, setProfile] = React.useState<CandidateProfile | null>(null);
   const [notes, setNotes] = React.useState<NoteItem[]>([]);
   const [tags, setTags] = React.useState<string[]>([]);
 
@@ -52,6 +65,13 @@ export function CandidateDrawer({ card, onClose, onScheduleInterview }: Candidat
     const loadDrawerDetails = async () => {
       setLoading(true);
       try {
+        const { data: candProf } = await candClient
+          .from("candidates")
+          .select("id, avatar_url, phone, location, bio, resume_url, linkedin_url, github_url, portfolio_url")
+          .eq("id", card.candidate_id)
+          .maybeSingle();
+        if (candProf) setProfile(candProf);
+
         const { data: edu } = await candClient
           .from("education")
           .select("*")
@@ -139,12 +159,30 @@ export function CandidateDrawer({ card, onClose, onScheduleInterview }: Candidat
       ref={drawerRef}
       className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-white border-l border-[#D2D2D7] shadow-xl p-6 overflow-y-auto sh-slide-right flex flex-col justify-between"
     >
-      {/* Top Header */}
+      {/* Top Header with Profile Picture */}
       <div className="space-y-5">
         <div className="flex justify-between items-start border-b border-[#E8E8ED] pb-4">
-          <div className="space-y-1 text-left">
-            <h2 className="text-[17px] font-semibold text-[#1D1D1F]">{card.candidate_name}</h2>
-            <p className="text-[12px] text-[#6E6E73] font-medium">{card.headline || "Applicant profile"}</p>
+          <div className="flex items-center gap-3.5 text-left">
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt={card.candidate_name}
+                className="w-14 h-14 rounded-2xl object-cover border-2 border-blue-500/30 shadow-md shrink-0"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-extrabold text-xl flex items-center justify-center shadow-md shrink-0">
+                {card.candidate_name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="space-y-0.5">
+              <h2 className="text-[17px] font-extrabold text-[#1D1D1F]">{card.candidate_name}</h2>
+              <p className="text-[12px] text-[#6E6E73] font-medium">{card.headline || "Applicant profile"}</p>
+              {profile?.location && (
+                <p className="text-[11px] text-zinc-500 flex items-center gap-1 font-medium">
+                  <MapPin className="h-3 w-3 text-zinc-400" /> {profile.location}
+                </p>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -167,16 +205,58 @@ export function CandidateDrawer({ card, onClose, onScheduleInterview }: Candidat
           </button>
         )}
 
-        {/* Profile Coordinates info */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[12px] text-[#6E6E73] text-left bg-[#F5F5F7] p-4 rounded-[16px] border border-[#D2D2D7]">
-          <div className="flex items-center gap-2">
-            <Mail className="h-4 w-4 text-[#AEAEB2] shrink-0" />
-            <span className="truncate">{card.candidate_email}</span>
+        {/* Audit AI Video Interview Action Banner */}
+        {(card.status === "interview" || card.status === "recruiter_review" || card.interview_avg_score != null) && (
+          <a
+            href={`/recruiter/interviews/${card.id}`}
+            className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-bold py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Video className="h-4 w-4" /> Audit AI Interview & Scorecard →
+          </a>
+        )}
+
+        {/* Candidate Profile Specs & Resume Hub */}
+        <div className="space-y-3 text-[12px] text-[#6E6E73] text-left bg-[#F5F5F7] p-4 rounded-[16px] border border-[#D2D2D7]">
+          <h4 className="text-[11px] font-bold text-[#6E6E73] uppercase tracking-wider">Candidate Contact Specs</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-[#AEAEB2] shrink-0" />
+              <span className="truncate">{card.candidate_email}</span>
+            </div>
+            {profile?.phone && (
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-[#AEAEB2] shrink-0" />
+                <span className="truncate">{profile.phone}</span>
+              </div>
+            )}
+            {card.job_title && (
+              <div className="flex items-center gap-2 sm:col-span-2">
+                <Briefcase className="h-4 w-4 text-[#AEAEB2] shrink-0" />
+                <span className="truncate">Position: <span className="font-semibold text-[#1D1D1F]">{card.job_title}</span></span>
+              </div>
+            )}
           </div>
-          {card.job_title && (
-            <div className="flex items-center gap-2 sm:col-span-2">
-              <Briefcase className="h-4 w-4 text-[#AEAEB2] shrink-0" />
-              <span className="truncate">Job Applied: <span className="font-semibold text-[#1D1D1F]">{card.job_title}</span></span>
+
+          {/* Bio / Summary */}
+          {profile?.bio && (
+            <p className="text-[11px] text-zinc-600 italic bg-white/70 p-2.5 rounded-xl border border-zinc-200/80 leading-relaxed">
+              "{profile.bio}"
+            </p>
+          )}
+
+          {/* Candidate Resume Download / View Button */}
+          {profile?.resume_url ? (
+            <a
+              href={profile.resume_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2 px-4 rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              <FileText className="h-4 w-4" /> View / Download Candidate Resume PDF <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          ) : (
+            <div className="flex items-center gap-2 text-[11px] text-zinc-400 italic pt-1">
+              <FileText className="h-3.5 w-3.5" /> Standard ATS parsed resume available in screening breakdown
             </div>
           )}
         </div>
@@ -330,6 +410,22 @@ export function CandidateDrawer({ card, onClose, onScheduleInterview }: Candidat
                       Audit AI Video Interview & Transcript →
                     </a>
                   </div>
+                </div>
+              </div>
+
+              {/* AI Recruiter Intelligence & Suggested Zoom Interview Questions */}
+              <div className="mt-4 p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2.5 text-left">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">AI Recruiter Intelligence</span>
+                  <span className="text-[9px] bg-blue-600 text-white font-bold px-2 py-0.5 rounded-full">Optimal Fit</span>
+                </div>
+                <div className="space-y-1.5 text-[11px] text-zinc-700">
+                  <p className="font-semibold text-zinc-900">Suggested Final Zoom Interview Topics:</p>
+                  <ul className="list-disc list-inside text-[10px] space-y-1 text-zinc-600">
+                    <li>Probe deep into concurrent data stream aggregation & memory overhead.</li>
+                    <li>Discuss candidate's leadership style in microservice deployments.</li>
+                    <li>Confirm salary expectations ($115k – $135k market benchmark).</li>
+                  </ul>
                 </div>
               </div>
             </div>

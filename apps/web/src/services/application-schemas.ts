@@ -13,6 +13,21 @@ export const applyJobSchema = z.object({
  * Application Pipeline Status Update Validation Schema
  */
 export const updateApplicationStatusSchema = z.object({
-  status: z.enum(["applied", "screening", "mcq", "coding", "interview", "offered", "rejected", "withdrawn"]),
+  status: z.enum([
+    "applied",
+    "screening",
+    "mcq",
+    "coding",
+    "interview",
+    "recruiter_review",
+    "zoom_interview",
+    "offer_sent",
+    "offered",
+    "offer_accepted",
+    "joined",
+    "rejected",
+    "withdrawn",
+  ]),
   notes: z.string().max(2000, "Notes cannot exceed 2000 characters").optional().nullable(),
+  rejection_stage: z.string().optional().nullable(),
 });

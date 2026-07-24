@@ -19,7 +19,7 @@ export function PasswordStrength({ password = "" }: PasswordStrengthProps) {
 
   const strengthColor = () => {
     if (score <= 1) return "bg-red-500";
-    if (score <= 3) return "bg-yellow-500";
+    if (score <= 3) return "bg-amber-500";
     return "bg-emerald-500";
   };
 
@@ -35,22 +35,22 @@ export function PasswordStrength({ password = "" }: PasswordStrengthProps) {
       {/* Visual meter bar */}
       <div className="space-y-1">
         <div className="flex justify-between items-center text-xs">
-          <span className="text-zinc-500">Password Strength:</span>
+          <span className="text-zinc-600 font-medium">Password Strength:</span>
           <span
             className={`font-semibold ${
               score <= 1
-                ? "text-red-500"
+                ? "text-red-600"
                 : score <= 3
-                ? "text-yellow-555"
-                : "text-emerald-500"
+                ? "text-amber-600"
+                : "text-emerald-600"
             }`}
           >
             {strengthLabel()}
           </span>
         </div>
-        <div className="h-1.5 w-full bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+        <div className="h-1.5 w-full bg-zinc-200 rounded-full overflow-hidden">
           <div
-            className={`h-full transition-all duration-350 ${strengthColor()}`}
+            className={`h-full transition-all duration-300 ${strengthColor()}`}
             style={{ width: `${password.length === 0 ? 0 : (score / 4) * 100}%` }}
           />
         </div>
@@ -61,11 +61,11 @@ export function PasswordStrength({ password = "" }: PasswordStrengthProps) {
         {requirements.map((req, i) => (
           <div key={i} className="flex items-center gap-1.5 text-xs text-zinc-500">
             {req.val ? (
-              <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+              <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
             ) : (
-              <X className="h-3.5 w-3.5 text-zinc-300 dark:text-zinc-700 shrink-0" />
+              <X className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
             )}
-            <span className={req.val ? "text-zinc-700 dark:text-zinc-300" : ""}>
+            <span className={req.val ? "text-zinc-800 font-semibold" : "text-zinc-500"}>
               {req.label}
             </span>
           </div>

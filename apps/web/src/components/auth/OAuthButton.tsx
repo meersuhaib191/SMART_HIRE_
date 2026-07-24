@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Button } from "@smarthire/ui";
 
 interface OAuthButtonProps {
   provider: "google" | "microsoft";
@@ -35,29 +34,27 @@ export function OAuthButton({ provider, onClick, disabled }: OAuthButtonProps) {
         </svg>
       );
     }
-    // Microsoft icon (using SVGs)
     return (
       <svg className="h-4 w-4 shrink-0" viewBox="0 0 23 23">
         <path fill="#f35325" d="M1 1h10v10H1z" />
-        <path fill="#81bc06" d="M12 1h10v10H12z" />
+        <path fill="#81bc06" d="M12 1h10v10H1z" />
         <path fill="#05a6f0" d="M1 12h10v10H1z" />
-        <path fill="#ffba08" d="M12 12h10v10H12z" />
+        <path fill="#ffba08" d="M12 12h10v10H1z" />
       </svg>
     );
   };
 
-  const label = isGoogle ? "Sign in with Google" : "Sign in with Microsoft";
+  const label = isGoogle ? "Google" : "Microsoft";
 
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
       onClick={onClick}
       disabled={disabled}
-      className="w-full justify-center flex items-center gap-2 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 h-10"
+      className="w-full justify-center flex items-center gap-2.5 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 transition-all h-10 px-3 text-xs font-semibold shadow-sm hover:border-zinc-400 cursor-pointer disabled:opacity-50"
     >
       {renderIcon()}
-      <span className="text-sm font-medium">{label}</span>
-    </Button>
+      <span>{label}</span>
+    </button>
   );
 }

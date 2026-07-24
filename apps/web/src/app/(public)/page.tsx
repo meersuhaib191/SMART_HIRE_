@@ -2,7 +2,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Button } from "@smarthire/ui";
 import { FaqSection } from "@/components/marketing/Faq";
-import { PricingCard, pricingPlans } from "@/components/marketing/PricingCard";
+
 import {
   BrainCircuit,
   FileSearch,
@@ -287,23 +287,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─────────────────────────────────────────────────────────────────────────────
-          7. PRICING SECTION
-          ───────────────────────────────────────────────────────────────────────────── */}
-      <section id="pricing" className="mx-auto max-w-7xl px-6 py-20 md:py-28 border-t border-zinc-900/60">
-        <div className="text-center max-w-3xl mx-auto space-y-4">
-          <h2 className="text-3xl font-extrabold sm:text-4xl">Simple, Transparent Pricing</h2>
-          <p className="text-zinc-400">
-            Start free, upgrade as your team scales. No hidden fees.
-          </p>
-        </div>
 
-        <div className="mt-16 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {pricingPlans.map((plan) => (
-            <PricingCard key={plan.name} plan={plan} isAnnual={true} />
-          ))}
-        </div>
-      </section>
 
       {/* ─────────────────────────────────────────────────────────────────────────────
           8. FAQ SECTION

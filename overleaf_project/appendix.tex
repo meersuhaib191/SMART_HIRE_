@@ -1,0 +1,138 @@
+\appendix
+\chapter{Database Schema Reference}
+\label{app:schema}
+
+This appendix documents the complete database schema used by SmartHire, organised by PostgreSQL schema namespace.
+
+\section*{A.1\quad \texttt{auth} Schema}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{auth.users} table}
+\small
+\begin{tabular}{p{1.5in}p{1.2in}p{2.8in}}
+\toprule
+\textbf{Column} & \textbf{Type} & \textbf{Description} \\
+\midrule
+id               & UUID (PK)     & Auto-generated unique identifier \\
+email            & VARCHAR(255)  & User email address (unique) \\
+encrypted\_password & TEXT       & bcrypt-hashed password \\
+role             & VARCHAR(20)   & One of: candidate, recruiter, admin \\
+created\_at      & TIMESTAMP     & Account creation timestamp \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section*{A.2\quad \texttt{organization} Schema}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{organization.companies} table}
+\small
+\begin{tabular}{p{1.5in}p{1.2in}p{2.8in}}
+\toprule
+\textbf{Column} & \textbf{Type} & \textbf{Description} \\
+\midrule
+id         & UUID (PK)     & Company identifier \\
+name       & VARCHAR(200)  & Company name \\
+industry   & VARCHAR(100)  & Industry sector \\
+website    & VARCHAR(255)  & Company website URL \\
+logo\_url  & TEXT          & Company logo file URL \\
+created\_at & TIMESTAMP    & Record creation timestamp \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{organization.recruiters} table}
+\small
+\begin{tabular}{p{1.5in}p{1.2in}p{2.8in}}
+\toprule
+\textbf{Column} & \textbf{Type} & \textbf{Description} \\
+\midrule
+id          & UUID (PK)  & Recruiter identifier \\
+user\_id   & UUID (FK)  & References auth.users.id \\
+company\_id & UUID (FK) & References organization.companies.id \\
+position    & VARCHAR(100) & Recruiter's job title \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section*{A.3\quad \texttt{job} Schema}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{job.jobs} table}
+\small
+\begin{tabular}{p{1.5in}p{1.2in}p{2.8in}}
+\toprule
+\textbf{Column} & \textbf{Type} & \textbf{Description} \\
+\midrule
+id             & UUID (PK)     & Job posting identifier \\
+recruiter\_id  & UUID (FK)     & References organization.recruiters.id \\
+title          & VARCHAR(200)  & Job title \\
+description    & TEXT          & Full job description \\
+skills         & TEXT[]        & Required skills array \\
+location       & VARCHAR(100)  & Job location \\
+employment\_type & VARCHAR(50) & full-time, part-time, contract, internship \\
+salary\_range  & VARCHAR(50)   & Salary range string \\
+status         & VARCHAR(20)   & draft, published, closed \\
+created\_at    & TIMESTAMP     & Posting creation timestamp \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section*{A.4\quad \texttt{application} Schema}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{application.applications} table}
+\small
+\begin{tabular}{p{1.5in}p{1.2in}p{2.8in}}
+\toprule
+\textbf{Column} & \textbf{Type} & \textbf{Description} \\
+\midrule
+id               & UUID (PK)  & Application identifier \\
+job\_id          & UUID (FK)  & References job.jobs.id \\
+candidate\_id    & UUID (FK)  & References candidate.candidates.id \\
+stage            & VARCHAR(30) & Current pipeline stage \\
+ats\_score       & NUMERIC(4,2) & ATS relevance score (0--10) \\
+mcq\_score       & NUMERIC(5,2) & MCQ percentage score \\
+coding\_score    & NUMERIC(5,2) & Coding assessment percentage \\
+interview\_score & JSONB       & AI interview scorecard \\
+status           & VARCHAR(20) & active, rejected, hired, withdrawn \\
+rejection\_stage & VARCHAR(30) & Stage at which rejection occurred \\
+created\_at      & TIMESTAMP   & Application submission timestamp \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\chapter{API Endpoint Reference}
+\label{app:api}
+
+\begin{table}[htbp]
+\centering
+\caption{Core REST API endpoints}
+\small
+\begin{tabular}{p{0.7in}p{2.5in}p{2.3in}}
+\toprule
+\textbf{Method} & \textbf{Endpoint} & \textbf{Description} \\
+\midrule
+POST   & /api/auth/register         & Register a new user \\
+POST   & /api/auth/login            & Authenticate and receive JWT \\
+GET    & /api/jobs                  & List published jobs (public) \\
+POST   & /api/jobs                  & Create a new job posting \\
+GET    & /api/jobs/[id]             & Get job details \\
+PATCH  & /api/jobs/[id]             & Update job status or details \\
+POST   & /api/applications          & Submit a job application \\
+PATCH  & /api/applications/[id]     & Update application stage \\
+GET    & /api/candidate/applications & List candidate's applications \\
+POST   & /api/v1/assessment/attempts/[id]/submit & Submit MCQ attempt \\
+POST   & /api/ai/evaluate-resume    & Trigger ATS scoring \\
+POST   & /api/ai/evaluate-interview & Trigger interview scorecard \\
+GET    & /api/analytics/dashboard   & Recruiter dashboard metrics \\
+POST   & /api/recruiter/offer       & Generate offer letter \\
+\bottomrule
+\end{tabular}
+\end{table}

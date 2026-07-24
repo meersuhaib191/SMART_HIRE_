@@ -44,6 +44,7 @@ export default function HandsFreeAIVideoCallRoomPage() {
 
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = React.useRef<any>(null);
   const audioContextRef = React.useRef<AudioContext | null>(null);
@@ -157,19 +158,15 @@ export default function HandsFreeAIVideoCallRoomPage() {
     ];
   }, []);
 
-  // Initialize Camera & Microphone with Flexible Fallback Constraints
+  // Initialize Camera & Microphone automatically on page load
   const startMediaStreams = React.useCallback(async () => {
     try {
-      // Flexible media constraints to ensure camera works on all laptop webcams
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280, min: 640 },
-          height: { ideal: 720, min: 480 },
-          facingMode: "user",
-        },
+        video: { facingMode: "user" },
         audio: true,
       });
 
+      streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.onloadedmetadata = () => {
@@ -203,9 +200,9 @@ export default function HandsFreeAIVideoCallRoomPage() {
       }
     } catch (err) {
       logger.error("WebCam/Mic stream permission denied or device busy", err);
-      // Fallback: try audio-only or low resolution video if strict video failed
       try {
         const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        streamRef.current = fallbackStream;
         if (videoRef.current) {
           videoRef.current.srcObject = fallbackStream;
           videoRef.current.play().catch(() => {});
@@ -213,10 +210,45 @@ export default function HandsFreeAIVideoCallRoomPage() {
         setStreamActive(true);
       } catch (fallbackErr) {
         logger.error("Fallback media stream also failed", fallbackErr);
-        alert("Camera or Microphone permission was denied. Please allow camera and mic permissions in browser address bar.");
       }
     }
   }, []);
+
+  // Call startMediaStreams automatically on component mount
+  React.useEffect(() => {
+    startMediaStreams();
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [startMediaStreams]);
+
+  // Keep videoRef element synchronized with active streamRef whenever DOM updates
+  React.useEffect(() => {
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [hasStarted, streamActive]);
+
+  // Toggle Camera
+  React.useEffect(() => {
+    if (streamRef.current) {
+      streamRef.current.getVideoTracks().forEach((track) => {
+        track.enabled = cameraEnabled;
+      });
+    }
+  }, [cameraEnabled]);
+
+  // Toggle Microphone
+  React.useEffect(() => {
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach((track) => {
+        track.enabled = micEnabled;
+      });
+    }
+  }, [micEnabled]);
 
   // Continuous Automatic Hands-Free Speech Recognition (Auto STT)
   const startAutoSpeechRecognition = React.useCallback(() => {
@@ -242,14 +274,19 @@ export default function HandsFreeAIVideoCallRoomPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       recognition.onresult = (event: any) => {
         let finalTranscript = "";
+        let interimTranscript = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
             finalTranscript += event.results[i][0].transcript + " ";
+          } else {
+            interimTranscript += event.results[i][0].transcript;
           }
         }
         if (finalTranscript.trim()) {
           setCandidateAnswer((prev) => (prev ? `${prev.trim()} ${finalTranscript.trim()}` : finalTranscript.trim()));
           setLatestSubtitles(`You: "${finalTranscript.trim()}"`);
+        } else if (interimTranscript.trim()) {
+          setLatestSubtitles(`You (speaking...): "${interimTranscript.trim()}"`);
         }
       };
 
@@ -273,7 +310,9 @@ export default function HandsFreeAIVideoCallRoomPage() {
     }
   }, []);
 
-  // Load Job details from Database
+  const [isLinkExpired, setIsLinkExpired] = React.useState(false);
+
+  // Load Job & PDF Questions details from Database
   React.useEffect(() => {
     const loadData = async () => {
       try {
@@ -282,43 +321,90 @@ export default function HandsFreeAIVideoCallRoomPage() {
           setCandidateName(`${user.user_metadata.first_name} ${user.user_metadata.last_name || ""}`.trim());
         }
 
+        // 1. Try fetching meeting from interview.interviews by ID
         const { data: meeting } = await supabase
           .schema("interview")
           .from("interviews")
-          .select("id, application_id")
+          .select("id, application_id, status")
           .eq("id", interviewId)
-          .single();
+          .maybeSingle();
+
+        if (meeting && (meeting.status === "rescheduled" || meeting.status === "expired" || meeting.status === "cancelled")) {
+          setIsLinkExpired(true);
+        }
+
+        let appId = meeting?.application_id;
+
+        // 2. If no interview record found by ID, interviewId is the application_id itself
+        if (!appId) {
+          const { data: directApp } = await supabase
+            .schema("application")
+            .from("applications")
+            .select("id, job_id, status")
+            .eq("id", interviewId)
+            .maybeSingle();
+
+          if (directApp) {
+            appId = directApp.id;
+          }
+        }
 
         let title = "Full Stack Software Engineer";
+        let fetchedQuestions: QuestionStep[] = [];
 
-        if (meeting?.application_id) {
+        if (appId) {
           const { data: app } = await supabase
             .schema("application")
             .from("applications")
             .select("job_id")
-            .eq("id", meeting.application_id)
+            .eq("id", appId)
             .single();
 
           if (app?.job_id) {
             const { data: job } = await supabase
               .schema("job")
               .from("jobs")
-              .select("title, category")
+              .select("title, category, mcq_assessment_id, coding_assessment_id")
               .eq("id", app.job_id)
               .single();
 
             if (job) {
               title = job.title;
               setJobCategory(job.category || "Engineering");
+
+              // Fetch PDF/assigned questions if present on the job
+              const assessmentIds = [job.mcq_assessment_id, job.coding_assessment_id].filter(Boolean);
+              if (assessmentIds.length > 0) {
+                const { data: dbQ } = await supabase
+                  .schema("assessment")
+                  .from("questions")
+                  .select("id, question_text, category, question_type")
+                  .in("assessment_id", assessmentIds);
+
+                if (dbQ && dbQ.length > 0) {
+                  fetchedQuestions = dbQ.map((q, idx) => ({
+                    id: idx + 1,
+                    category: idx === 0 ? "academics" : idx === dbQ.length - 1 ? "wrapup" : "technical",
+                    categoryTitle: `Question ${idx + 1}: ${q.category || "PDF Assessment Question"}`,
+                    categoryIcon: Code,
+                    question: q.question_text,
+                    contextHint: "Evaluated against PDF assessment criteria.",
+                  }));
+                }
+              }
             }
           }
         }
 
         setJobTitle(title);
-        const generated = generateJDTailoredQuestions(title);
-        setQuestions(generated);
+        if (fetchedQuestions.length > 0) {
+          setQuestions(fetchedQuestions);
+        } else {
+          setQuestions(generateJDTailoredQuestions(title));
+        }
       } catch (err) {
         logger.error("Error setting up AI interview room data", err);
+        setQuestions(generateJDTailoredQuestions("Full Stack Software Engineer"));
       } finally {
         setLoading(false);
       }
@@ -456,7 +542,9 @@ export default function HandsFreeAIVideoCallRoomPage() {
 
   // Start Call Handler
   const handleStartCall = async () => {
-    await startMediaStreams();
+    if (!streamActive) {
+      await startMediaStreams();
+    }
     setHasStarted(true);
 
     if (document.documentElement.requestFullscreen) {
@@ -464,15 +552,17 @@ export default function HandsFreeAIVideoCallRoomPage() {
     }
 
     const firstQ = questions[0];
-    const initialEntry: TranscriptEntry = {
-      speaker: "ai",
-      text: firstQ.question,
-      timestamp: new Date().toLocaleTimeString(),
-      category: firstQ.categoryTitle,
-    };
+    if (firstQ) {
+      const initialEntry: TranscriptEntry = {
+        speaker: "ai",
+        text: firstQ.question,
+        timestamp: new Date().toLocaleTimeString(),
+        category: firstQ.categoryTitle,
+      };
 
-    setTranscript([initialEntry]);
-    speakAIQuestion(firstQ.question);
+      setTranscript([initialEntry]);
+      speakAIQuestion(firstQ.question);
+    }
   };
 
   // Submit Answer & Next Question
@@ -563,11 +653,33 @@ export default function HandsFreeAIVideoCallRoomPage() {
     );
   }
 
+  if (isLinkExpired) {
+    return (
+      <div className="max-w-lg mx-auto py-24 px-4 text-center space-y-5 animate-in fade-in duration-300">
+        <div className="w-16 h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto border border-red-100 shadow-sm">
+          <AlertCircle className="h-8 w-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-zinc-900">Interview Session Link Expired</h2>
+          <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+            This interview session link has expired because it was rescheduled or updated by the recruiter. Please return to your candidate portal to launch your newly scheduled interview round.
+          </p>
+        </div>
+        <Button
+          onClick={() => router.push("/candidate/interviews")}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs px-6 h-10 shadow-sm cursor-pointer"
+        >
+          Return to Candidate Portal
+        </Button>
+      </div>
+    );
+  }
+
   // Pre-Call Lobby Screen
   if (!hasStarted) {
     return (
-      <div className="max-w-4xl mx-auto py-10 px-4 space-y-8 text-left animate-in fade-in duration-300">
-        <div className="space-y-2">
+      <div className="max-w-4xl mx-auto py-8 px-4 space-y-6 text-left animate-in fade-in duration-300">
+        <div className="space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-extrabold text-blue-600 uppercase tracking-widest bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
               Live AI Video Interview
@@ -576,16 +688,16 @@ export default function HandsFreeAIVideoCallRoomPage() {
               Hands-Free Speech Recognition Active
             </span>
           </div>
-          <h1 className="text-3xl font-extrabold text-zinc-900 tracking-tight">
+          <h1 className="text-2xl font-extrabold text-zinc-900 tracking-tight">
             Join the Live AI Video Call
           </h1>
-          <p className="text-sm text-zinc-600 font-medium">
+          <p className="text-xs text-zinc-600 font-medium">
             Position: <span className="font-bold text-zinc-900">{jobTitle}</span> ({jobCategory})
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 rounded-2xl border border-zinc-200 bg-zinc-950 p-6 flex flex-col justify-between min-h-[320px] text-white relative overflow-hidden shadow-lg">
+          <div className="md:col-span-2 rounded-2xl border border-zinc-200 bg-zinc-950 p-6 flex flex-col justify-between min-h-[340px] text-white relative overflow-hidden shadow-lg">
             <div className="flex items-center justify-between z-10">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xs">
@@ -593,50 +705,77 @@ export default function HandsFreeAIVideoCallRoomPage() {
                 </div>
                 <span className="text-xs font-bold text-zinc-200">SmartHire AI Senior Interactor</span>
               </div>
-              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
+              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                 Ready in Lobby
               </span>
             </div>
 
-            <div className="my-8 text-center space-y-3 z-10">
+            <div className="my-6 text-center space-y-3 z-10">
               <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-600 mx-auto flex items-center justify-center shadow-xl">
                 <Sparkles className="h-9 w-9 text-white animate-pulse" />
               </div>
-              <p className="text-sm font-bold text-zinc-100">
-                Automatic Speech Recognition will listen to your voice as you speak out loud.
+              <p className="text-xs font-bold text-zinc-200 max-w-sm mx-auto leading-relaxed">
+                Automatic Speech Recognition will listen to your voice as you speak out loud. Speak clearly into your microphone.
               </p>
             </div>
 
             <div className="text-[11px] text-zinc-400 font-medium border-t border-zinc-800 pt-3 z-10 flex items-center justify-between">
-              <span>6 Real-World Technical Phases</span>
+              <span>{questions.length} Evaluation Questions</span>
               <span>Hands-Free Auto Voice Input</span>
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-sm text-left">
-              <h3 className="text-sm font-bold text-zinc-900 flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" /> Device & Security Check
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" /> WebCam & Mic Check
+                </h3>
+                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                  {streamActive ? "Live Stream Active" : "Detecting..."}
+                </span>
+              </div>
 
-              <div className="space-y-2.5 text-xs font-medium text-zinc-600">
+              {/* Live WebCam Feed Preview in Lobby */}
+              <div className="rounded-xl border border-zinc-800 bg-black overflow-hidden relative h-40 shadow-inner">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover transform -scale-x-100 ${!cameraEnabled ? "hidden" : ""}`}
+                />
+                {!cameraEnabled && (
+                  <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center text-zinc-500 gap-1">
+                    <VideoOff className="h-6 w-6" />
+                    <span className="text-[11px] font-bold">Camera Off</span>
+                  </div>
+                )}
+
+                {/* Live Mic Sensitivity Bar */}
+                <div className="absolute bottom-2 left-2 right-2 bg-black/75 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-2 text-[10px] text-white border border-white/10">
+                  <Mic className="h-3 w-3 text-emerald-400 shrink-0" />
+                  <div className="h-1 flex-1 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-emerald-400 to-blue-400 transition-all duration-75" style={{ width: `${micVolume}%` }} />
+                  </div>
+                  <span className="font-mono text-emerald-400 font-bold text-[9px]">{micVolume}%</span>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-[11px] font-medium text-zinc-600">
                 <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-100">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span>WebCam & Mic Auto-Detect</span>
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                  <span>WebCam & Microphone Connected</span>
                 </div>
                 <div className="flex items-center gap-2 text-blue-700 bg-blue-50 p-2 rounded-lg border border-blue-100">
-                  <ShieldCheck className="h-4 w-4 shrink-0" />
-                  <span>Anti-Cheat & Key Blocking Active</span>
-                </div>
-                <div className="flex items-center gap-2 text-purple-700 bg-purple-50 p-2 rounded-lg border border-purple-100">
-                  <Mic className="h-4 w-4 shrink-0" />
-                  <span>Automatic Speech Recognition</span>
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                  <span>Proctoring & Anti-Cheat Guard Active</span>
                 </div>
               </div>
 
               <Button
                 onClick={handleStartCall}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-11 rounded-xl text-xs shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01]"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 rounded-xl text-xs shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01]"
               >
                 <Video className="h-4 w-4" /> Enter AI Video Call Room
               </Button>
@@ -667,7 +806,7 @@ export default function HandsFreeAIVideoCallRoomPage() {
           </div>
           <div>
             <h2 className="text-xs font-bold text-white">{jobTitle} — Live AI Video Interview</h2>
-            <span className="text-[10px] text-zinc-400 font-semibold">Phase {currentStepIdx + 1}/{questions.length}: {currentQ.categoryTitle}</span>
+            <span className="text-[10px] text-zinc-400 font-semibold">Phase {currentStepIdx + 1}/{questions.length}: {currentQ?.categoryTitle}</span>
           </div>
         </div>
 
@@ -704,7 +843,7 @@ export default function HandsFreeAIVideoCallRoomPage() {
 
             <div className="flex items-center gap-2 bg-zinc-900/80 px-3 py-1.5 rounded-xl text-xs font-bold text-blue-300 border border-zinc-800">
               <CategoryIcon className="h-3.5 w-3.5" />
-              <span>{currentQ.categoryTitle}</span>
+              <span>{currentQ?.categoryTitle}</span>
             </div>
           </div>
 
@@ -717,10 +856,10 @@ export default function HandsFreeAIVideoCallRoomPage() {
 
             <div className="max-w-2xl mx-auto bg-zinc-900/90 border border-zinc-800 p-4 rounded-2xl shadow-2xl text-left space-y-1">
               <span className="text-[10px] text-blue-400 font-extrabold uppercase tracking-widest block">
-                Question {currentStepIdx + 1} of {questions.length} ({currentQ.categoryTitle})
+                Question {currentStepIdx + 1} of {questions.length} ({currentQ?.categoryTitle})
               </span>
               <p className="text-sm font-semibold text-zinc-100 leading-relaxed">
-                "{currentQ.question}"
+                "{currentQ?.question}"
               </p>
             </div>
           </div>

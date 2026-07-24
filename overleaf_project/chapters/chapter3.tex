@@ -1,0 +1,268 @@
+\setcounter{chapter}{2}
+\chapter{Requirement Analysis}
+\label{ch:requirements}
+
+\section{Overview}
+\label{sec:req-overview}
+
+This chapter specifies the requirements that guided the design and implementation of SmartHire. Requirements are organised into functional requirements (what the system must do), non-functional requirements (how well it must do it), and operational constraints. We also present a feasibility study, define the system's actors and use cases, detail the technology stack, and discuss risk factors.
+
+\section{System Actors}
+\label{sec:actors}
+
+SmartHire supports three categories of users, each with distinct permissions and workflows:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Candidate}: An individual seeking employment who registers on the platform, browses job listings, submits applications, completes assessments, participates in interviews, and tracks application status.
+  \item \textbf{Recruiter}: An employee of a hiring organisation who creates job postings, reviews candidate applications and scores, manages the hiring pipeline, schedules interviews, and generates offer letters. Each recruiter is associated with exactly one company.
+  \item \textbf{Administrator}: A platform operator with access to system-wide analytics, user management, and configuration settings.
+\end{enumerate}
+
+\section{Functional Requirements}
+\label{sec:functional-reqs}
+
+\subsection{Candidate Portal Requirements}
+
+\begin{table}[htbp]
+\centering
+\caption{Functional requirements: Candidate Portal}
+\label{tab:fr-candidate}
+\small
+\begin{tabular}{p{0.8in}p{4.8in}}
+\toprule
+\textbf{ID} & \textbf{Description} \\
+\midrule
+FR-C01 & The system shall allow candidates to register using email and password credentials, with email verification. \\
+FR-C02 & The system shall allow candidates to create and edit a profile containing personal information, skills, education, and work experience. \\
+FR-C03 & The system shall display a searchable, filterable directory of published job listings. Filters shall include job category, location, employment type, and keyword search. \\
+FR-C04 & The system shall allow candidates to apply for a job by uploading a PDF resume. The resume shall be parsed automatically to extract structured candidate data. \\
+FR-C05 & The system shall compute an ATS relevance score (0--10) for each application by comparing the parsed resume against the job's required skills and qualifications. \\
+FR-C06 & The system shall present timed MCQ assessments to candidates who advance past the ATS screening stage. Assessments shall enforce a countdown timer and auto-submit upon expiry. \\
+FR-C07 & The system shall provide a browser-based coding environment (Monaco editor) for candidates to solve coding challenges, with real-time test case execution and automated scoring. \\
+FR-C08 & The system shall provide an AI video interview interface that presents structured questions, records candidate responses, and submits them for AI evaluation. \\
+FR-C09 & The system shall display a candidate's application history showing the current stage, scores at each completed stage, and, for rejected applications, the specific stage of rejection. \\
+FR-C10 & The system shall allow candidates to view, accept, or decline offer letters. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Recruiter Portal Requirements}
+
+\begin{table}[htbp]
+\centering
+\caption{Functional requirements: Recruiter Portal}
+\label{tab:fr-recruiter}
+\small
+\begin{tabular}{p{0.8in}p{4.8in}}
+\toprule
+\textbf{ID} & \textbf{Description} \\
+\midrule
+FR-R01 & The system shall allow recruiters to register, set up a company profile, and associate themselves with an organisation. \\
+FR-R02 & The system shall allow recruiters to create job postings specifying title, description, required skills, salary range, location, and employment type. New postings shall default to ``draft'' status. \\
+FR-R03 & The system shall provide a Kanban-style pipeline board displaying candidates across stages: Applied, ATS Screened, MCQ, Coding, Interview, Offer, and Hired. Recruiters shall be able to move candidates between stages via drag-and-drop. \\
+FR-R04 & The system shall display detailed candidate evaluation cards showing ATS score, MCQ score, coding score, and AI interview scorecard. \\
+FR-R05 & The system shall allow recruiters to schedule interviews and share meeting links with candidates. \\
+FR-R06 & The system shall allow recruiters to generate customised PDF offer letters and dispatch them to candidates via the platform. \\
+FR-R07 & The system shall provide a dashboard showing hiring metrics (open positions, active applicants, offers issued) scoped to the recruiter's own job postings. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Administration Requirements}
+
+\begin{table}[htbp]
+\centering
+\caption{Functional requirements: Administration}
+\label{tab:fr-admin}
+\small
+\begin{tabular}{p{0.8in}p{4.8in}}
+\toprule
+\textbf{ID} & \textbf{Description} \\
+\midrule
+FR-A01 & The system shall provide administrators with a dashboard showing platform-wide analytics: total users, total applications, active jobs, and hiring funnel metrics. \\
+FR-A02 & The system shall allow administrators to view and manage user accounts. \\
+FR-A03 & The system shall maintain audit logs of significant system events. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Non-Functional Requirements}
+\label{sec:nonfunctional-reqs}
+
+\begin{table}[htbp]
+\centering
+\caption{Non-functional requirements}
+\label{tab:nfr}
+\small
+\begin{tabular}{p{0.8in}p{1.2in}p{3.5in}}
+\toprule
+\textbf{ID} & \textbf{Category} & \textbf{Description} \\
+\midrule
+NFR-01 & Performance   & Page load time shall not exceed two seconds on a standard broadband connection. API response time shall not exceed 500~ms for CRUD operations. \\
+NFR-02 & Security      & Passwords shall be hashed using bcrypt. Authentication shall use JWT tokens with HTTP-only cookies. All API endpoints shall validate user identity and authorisation. \\
+NFR-03 & Scalability   & The database schema shall support multiple concurrent recruiting organisations without performance degradation. \\
+NFR-04 & Availability  & The system shall target 99.5\% uptime through serverless deployment on Vercel with managed database hosting on Supabase. \\
+NFR-05 & Usability     & The interface shall be responsive across desktop and mobile viewports. Navigation shall be consistent across all portal views. \\
+NFR-06 & Maintainability & The codebase shall follow a modular service-repository architecture to facilitate independent modification of individual modules. \\
+NFR-07 & Data Integrity & Database constraints (foreign keys, NOT NULL, unique indexes) shall enforce referential integrity. Row-Level Security policies shall prevent cross-tenant data access. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Feasibility Study}
+\label{sec:feasibility}
+
+\subsection{Technical Feasibility}
+
+All core technologies required for SmartHire are mature, well-documented, and freely available. Next.js~15 provides a production-grade React framework with server-side rendering and API route support. Supabase offers a managed PostgreSQL service with built-in authentication and real-time capabilities. The Monaco editor is a proven, embeddable code editing component. Google's Gemini API provides commercial-grade multimodal AI capabilities through a RESTful interface. No custom hardware or proprietary infrastructure is required.
+
+\subsection{Operational Feasibility}
+
+The platform targets two user groups---candidates and recruiters---who are already accustomed to web-based tools. Candidates regularly use platforms such as LinkedIn, Naukri, and HackerRank; recruiters regularly use ATS platforms. SmartHire's interface follows established UX conventions for these contexts, minimising the learning curve. The serverless deployment model eliminates the need for dedicated operations staff.
+
+\subsection{Economic Feasibility}
+
+Development relies entirely on open-source frameworks and free-tier or pay-as-you-go cloud services. Supabase's free tier supports up to 500~MB of database storage and 50,000 monthly API requests, sufficient for development and small-scale deployment. Vercel's free tier supports hobby-level deployment. The Gemini API offers a free quota suitable for testing. Production deployment at scale would require paid tiers, but costs remain substantially below those of licensing multiple commercial recruitment tools.
+
+\section{Use Case Summary}
+\label{sec:usecases}
+
+Figure~\ref{fig:usecase} presents a high-level use case diagram identifying the primary interactions between each actor and the system.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.95\textwidth}{!}{
+\begin{tikzpicture}[
+  actor/.style={rectangle, draw, rounded corners, minimum width=1.8cm, minimum height=0.8cm, fill=blue!8},
+  usecase/.style={ellipse, draw, minimum width=2.8cm, minimum height=0.7cm, text width=2.4cm, align=center, font=\small, fill=yellow!6},
+  line/.style={draw, thick}
+]
+  \node[actor] (cand) at (0,0) {Candidate};
+  \node[actor] (rec)  at (12,0) {Recruiter};
+  \node[actor] (admin) at (6,-6.5) {Admin};
+
+  \node[usecase] (uc1) at (4, 2.5)  {Register / Login};
+  \node[usecase] (uc2) at (4, 1.2)  {Browse Jobs};
+  \node[usecase] (uc3) at (4, 0)    {Apply with Resume};
+  \node[usecase] (uc4) at (4,-1.2)  {Take MCQ Exam};
+  \node[usecase] (uc5) at (4,-2.4)  {Solve Coding Challenge};
+  \node[usecase] (uc6) at (4,-3.6)  {AI Video Interview};
+
+  \node[usecase] (uc7) at (8, 2.5)  {Create Job Posting};
+  \node[usecase] (uc8) at (8, 1.2)  {Review Candidates};
+  \node[usecase] (uc9) at (8, 0)    {Manage Pipeline};
+  \node[usecase] (uc10) at (8,-1.2) {Schedule Interview};
+  \node[usecase] (uc11) at (8,-2.4) {Generate Offer};
+  \node[usecase] (uc12) at (8,-3.6) {View Dashboard};
+
+  \node[usecase] (uc13) at (6,-5.2) {View Analytics};
+
+  \path[line] (cand) -- (uc1);
+  \path[line] (cand) -- (uc2);
+  \path[line] (cand) -- (uc3);
+  \path[line] (cand) -- (uc4);
+  \path[line] (cand) -- (uc5);
+  \path[line] (cand) -- (uc6);
+
+  \path[line] (rec) -- (uc1);
+  \path[line] (rec) -- (uc7);
+  \path[line] (rec) -- (uc8);
+  \path[line] (rec) -- (uc9);
+  \path[line] (rec) -- (uc10);
+  \path[line] (rec) -- (uc11);
+  \path[line] (rec) -- (uc12);
+
+  \path[line] (admin) -- (uc13);
+\end{tikzpicture}
+}
+\caption{Use case diagram showing primary actor interactions}
+\label{fig:usecase}
+\end{figure}
+
+\section{Technology Stack}
+\label{sec:techstack}
+
+\begin{table}[htbp]
+\centering
+\caption{Technology stack}
+\label{tab:techstack}
+\small
+\begin{tabular}{p{1.6in}p{1.2in}p{2.8in}}
+\toprule
+\textbf{Layer}       & \textbf{Technology}    & \textbf{Rationale} \\
+\midrule
+Frontend Framework   & Next.js 15             & Server-side rendering, file-based routing, API routes \\
+UI Library           & React 19               & Component-based architecture, concurrent rendering \\
+Language             & TypeScript 5           & Static type checking reduces runtime errors \\
+Styling              & Tailwind CSS           & Utility-first CSS framework for rapid UI development \\
+Icons                & Lucide React           & Consistent, lightweight SVG icon set \\
+Code Editor          & Monaco Editor          & VS Code engine; syntax highlighting, IntelliSense \\
+Backend/Database     & Supabase PostgreSQL    & Managed PostgreSQL with auth, RLS, real-time \\
+AI Engine            & Google Gemini API      & Multimodal LLM for resume scoring and interview evaluation \\
+PDF Generation       & jsPDF + html2canvas    & Client-side vector PDF rendering \\
+Deployment           & Vercel                 & Serverless edge deployment with global CDN \\
+Version Control      & Git + GitHub           & Collaborative source code management \\
+Package Manager      & pnpm                   & Fast, disk-efficient dependency management \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Hardware and Software Requirements}
+\label{sec:hw-sw}
+
+\subsection{Development Environment}
+
+\begin{table}[htbp]
+\centering
+\caption{Development environment requirements}
+\label{tab:dev-env}
+\small
+\begin{tabular}{p{2in}p{3.5in}}
+\toprule
+\textbf{Requirement} & \textbf{Specification} \\
+\midrule
+Operating System     & Windows 10/11 or Ubuntu 22.04 LTS \\
+Processor            & Intel Core i5 or equivalent (minimum) \\
+RAM                  & 8 GB minimum; 16 GB recommended \\
+Storage              & 20 GB free disk space \\
+Node.js              & v18.x or later \\
+Browser              & Chrome 120+ or Firefox 120+ \\
+IDE                  & Visual Studio Code 1.85+ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Production Environment}
+
+The production deployment runs on Vercel's serverless infrastructure, which provisions compute resources on demand. The database is hosted on Supabase's managed PostgreSQL service. No dedicated server hardware is required.
+
+\section{Constraints and Assumptions}
+\label{sec:constraints}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item The system assumes that all candidate resumes are uploaded as PDF files. Other document formats (DOCX, ODT) are not supported in the current version.
+  \item AI-based evaluation via Gemini API requires an active internet connection and a valid API key. API rate limits may constrain throughput during peak usage.
+  \item The coding assessment module currently supports JavaScript and Python. Additional languages require backend execution environment configuration.
+  \item The platform is designed for English-language content. Localisation is outside the scope of the current version.
+\end{itemize}
+
+\section{Risk Analysis}
+\label{sec:risk}
+
+\begin{table}[htbp]
+\centering
+\caption{Risk assessment matrix}
+\label{tab:risk}
+\small
+\begin{tabular}{p{2in}ccp{2.2in}}
+\toprule
+\textbf{Risk} & \textbf{Likelihood} & \textbf{Impact} & \textbf{Mitigation} \\
+\midrule
+API rate limiting (Gemini) & Medium & Medium & Queue requests; implement exponential backoff \\
+Database connection pooling exhaustion & Low & High & Use Supabase connection pooler; limit concurrent queries \\
+Resume parsing inaccuracy & Medium & Medium & Validate parsed output; allow candidate correction \\
+Cross-tenant data leakage & Low & Critical & RLS policies; schema-level isolation; integration tests \\
+Browser compatibility issues & Low & Low & Target latest two versions of Chrome and Firefox \\
+\bottomrule
+\end{tabular}
+\end{table}

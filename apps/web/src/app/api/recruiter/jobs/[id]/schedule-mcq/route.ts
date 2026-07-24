@@ -25,12 +25,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
     }
 
-    const { scheduledTime, assessmentId } = await request.json();
+    const { scheduledTime, assessmentId, templateFileName, durationMinutes } = await request.json();
     if (!scheduledTime) {
       return NextResponse.json({ error: "scheduledTime is required" }, { status: 400 });
     }
 
-    logger.info(`[MCQ Scheduler] Recruiter ${user.id} scheduling MCQ exam for job ${jobId} at ${scheduledTime}`);
+    logger.info(`[MCQ Scheduler] Recruiter ${user.id} scheduling MCQ exam for job ${jobId} at ${scheduledTime} with PDF template: ${templateFileName || "default"}`);
 
     // 2. Fetch job posting details
     const { data: job, error: jobErr } = await jobClient
@@ -45,53 +45,42 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     let finalAssessmentId = assessmentId || job.mcq_assessment_id;
+    const finalDuration = durationMinutes ? Number(durationMinutes) : 10;
 
-    if (!finalAssessmentId) {
-      // Auto-resolve an existing published MCQ assessment template
-      const { data: existingTpl } = await assessmentClient
+    if (templateFileName || !finalAssessmentId) {
+      const templateTitle = `${job.title} - MCQ Screening Assessment`;
+      const templateDesc = `MCQ screening evaluation for ${job.title}`;
+
+      const { data: newTpl } = await assessmentClient
         .from("assessments")
+        .insert({
+          company_id: job.company_id,
+          title: templateTitle,
+          description: templateDesc,
+          duration_minutes: finalDuration,
+          passing_percentage: 60,
+          status: "published",
+        })
         .select("id")
-        .eq("status", "published")
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
         .maybeSingle();
 
-      if (existingTpl) {
-        finalAssessmentId = existingTpl.id;
-      } else {
-        // AI Template Generation for MCQ based on Job Description & Title
-        const { data: newTpl } = await assessmentClient
-          .from("assessments")
-          .insert({
-            company_id: job.company_id,
-            title: `${job.title} - AI MCQ Assessment`,
-            description: `AI-generated MCQ evaluation tailored for ${job.title}`,
-            duration_minutes: 30,
-            passing_percentage: 60,
-            status: "published",
-          })
-          .select("id")
-          .maybeSingle();
+      if (newTpl) {
+        finalAssessmentId = newTpl.id;
 
-        if (newTpl) {
-          finalAssessmentId = newTpl.id;
-
-          await assessmentClient
-            .from("questions")
-            .insert([
-              {
-                assessment_id: newTpl.id,
-                question_text: `What is the primary operational responsibility of a ${job.title}?`,
-                question_type: "mcq",
-                options: ["Executing core domain workflows & code", "Designing brand logo", "Handling finance audit", "Manual paper sorting"],
-                correct_answer: "Executing core domain workflows & code",
-                points: 5,
-                difficulty: "easy",
-                category: "Domain Knowledge",
-              },
-            ]);
-        }
+        await assessmentClient
+          .from("questions")
+          .insert([
+            {
+              assessment_id: newTpl.id,
+              question_text: `What is the primary operational responsibility of a ${job.title}?`,
+              question_type: "mcq",
+              options: ["Executing core domain workflows & code", "Designing brand logo", "Handling finance audit", "Manual paper sorting"],
+              correct_answer: "Executing core domain workflows & code",
+              points: 5,
+              difficulty: "easy",
+              category: "Core Competencies",
+            },
+          ]);
       }
     }
 
@@ -113,12 +102,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Failed to update job schedule" }, { status: 500 });
     }
 
-    // 4. Fetch all active applications in 'mcq' status
+    // 4. Fetch all active applications for this job posting
     const { data: apps, error: appsErr } = await appClient
       .from("applications")
-      .select("id, candidate_id")
+      .select("id, candidate_id, status")
       .eq("job_id", jobId)
-      .eq("status", "mcq")
       .is("deleted_at", null);
 
     if (appsErr) {

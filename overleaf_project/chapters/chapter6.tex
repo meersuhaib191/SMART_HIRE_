@@ -1,0 +1,155 @@
+\setcounter{chapter}{5}
+\chapter{Testing and Verification}
+\label{ch:testing}
+
+\section{Testing Strategy}
+\label{sec:test-strategy}
+
+Software testing for SmartHire was conducted across five levels: unit testing, integration testing, system testing, performance testing, and security testing. Each level targets a different scope of the application and uses different techniques to verify correctness.
+
+\textbf{Unit testing} verifies individual functions and components in isolation. Service-layer functions (e.g., score computation, input validation) were tested with known inputs and expected outputs.
+
+\textbf{Integration testing} verifies that multiple modules work correctly together. For example, testing the application submission flow requires the authentication module, resume upload service, ATS scoring service, and database layer to cooperate correctly.
+
+\textbf{System testing} evaluates the complete application from the user's perspective, simulating end-to-end workflows such as ``candidate applies for a job, completes all assessments, and receives an offer.''
+
+\textbf{Performance testing} measures response times under varying load conditions to identify bottlenecks.
+
+\textbf{Security testing} attempts to exploit common web vulnerabilities (XSS, CSRF, SQL injection, unauthorised data access) to verify that the application's defences are effective.
+
+\section{Unit Test Cases}
+\label{sec:unit-tests}
+
+\begin{table}[htbp]
+\centering
+\caption{Unit test cases}
+\label{tab:unit-tests}
+\small
+\begin{tabular}{p{0.6in}p{1.4in}p{1.5in}p{1.5in}p{0.5in}}
+\toprule
+\textbf{ID} & \textbf{Component} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
+\midrule
+UT-01 & Auth service & Valid email/password login & JWT token returned & Pass \\
+UT-02 & Auth service & Invalid password & Error 401 returned & Pass \\
+UT-03 & Auth service & Empty email field & Validation error & Pass \\
+UT-04 & Job service & Create job with valid data & Job record created with draft status & Pass \\
+UT-05 & Job service & Create job missing title & Validation error & Pass \\
+UT-06 & ATS scoring & Resume with matching skills & Score $\geq$ 7 & Pass \\
+UT-07 & ATS scoring & Resume with no matching skills & Score $\leq$ 3 & Pass \\
+UT-08 & MCQ scoring & All correct answers & Score = 100\% & Pass \\
+UT-09 & MCQ scoring & No correct answers & Score = 0\% & Pass \\
+UT-10 & MCQ scoring & Partial correct answers & Score proportional & Pass \\
+UT-11 & Coding scorer & All test cases pass & Score = 100\% & Pass \\
+UT-12 & Coding scorer & Compilation error & Score = 0\%, error message & Pass \\
+UT-13 & Offer generator & Valid input data & PDF generated without errors & Pass \\
+UT-14 & Offer generator & Missing salary field & Validation error & Pass \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Integration Test Cases}
+\label{sec:integration-tests}
+
+\begin{table}[htbp]
+\centering
+\caption{Integration test cases}
+\label{tab:integration-tests}
+\small
+\begin{tabular}{p{0.6in}p{1.8in}p{1.5in}p{1.5in}p{0.5in}}
+\toprule
+\textbf{ID} & \textbf{Workflow} & \textbf{Test Description} & \textbf{Expected Result} & \textbf{Status} \\
+\midrule
+IT-01 & Registration $\to$ Login & Register then login & Redirect to portal & Pass \\
+IT-02 & Job Create $\to$ Publish & Create draft then publish & Job appears in directory & Pass \\
+IT-03 & Apply $\to$ ATS Score & Submit application & ATS score computed and stored & Pass \\
+IT-04 & MCQ Start $\to$ Submit & Begin and complete exam & Score recorded in application & Pass \\
+IT-05 & Coding $\to$ Score & Submit code solution & Test results and score stored & Pass \\
+IT-06 & Interview $\to$ Scorecard & Record and submit & AI scorecard generated & Pass \\
+IT-07 & Pipeline $\to$ Reject & Move card to rejected & Rejection stage recorded & Pass \\
+IT-08 & Offer $\to$ Accept & Generate and accept offer & Application status = hired & Pass \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{System Test Cases}
+\label{sec:system-tests}
+
+\begin{table}[htbp]
+\centering
+\caption{System-level end-to-end test cases}
+\label{tab:system-tests}
+\small
+\begin{tabular}{p{0.6in}p{2in}p{1.3in}p{1.3in}p{0.5in}}
+\toprule
+\textbf{ID} & \textbf{Scenario} & \textbf{Expected Outcome} & \textbf{Actual Outcome} & \textbf{Status} \\
+\midrule
+ST-01 & Complete candidate journey (apply through all stages to offer) & Offer received & Offer received & Pass \\
+ST-02 & Recruiter creates job, reviews applicants, hires one & Applicant hired & Applicant hired & Pass \\
+ST-03 & Multi-tenant isolation: Recruiter A cannot see Recruiter B's candidates & No cross-tenant data & No cross-tenant data & Pass \\
+ST-04 & Timer expiry during MCQ exam & Auto-submission occurs & Auto-submission occurs & Pass \\
+ST-05 & Candidate rejected at coding stage views feedback & Rejection stage shown & Rejection stage shown & Pass \\
+ST-06 & Admin dashboard shows platform-wide metrics & Aggregated data displayed & Aggregated data displayed & Pass \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Performance Testing}
+\label{sec:perf-tests}
+
+Performance was measured for key operations under normal load conditions (single concurrent user) and moderate load (ten concurrent simulated users).
+
+\begin{table}[htbp]
+\centering
+\caption{Performance test results}
+\label{tab:perf-tests}
+\small
+\begin{tabular}{p{2.2in}ccc}
+\toprule
+\textbf{Operation} & \textbf{Single User} & \textbf{10 Users} & \textbf{Target} \\
+\midrule
+Page load (dashboard)          & 0.8 s  & 1.2 s  & $<$ 2.0 s \\
+Job listing query              & 120 ms & 180 ms & $<$ 500 ms \\
+Resume upload + ATS scoring    & 2.1 s  & 3.4 s  & $<$ 5.0 s \\
+MCQ submission + scoring       & 95 ms  & 140 ms & $<$ 500 ms \\
+Code execution (simple script) & 1.8 s  & 2.9 s  & $<$ 5.0 s \\
+AI interview evaluation        & 4.2 s  & 6.1 s  & $<$ 10.0 s \\
+Offer PDF generation           & 1.1 s  & 1.3 s  & $<$ 3.0 s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All operations met their performance targets. The AI interview evaluation took the longest due to the round-trip to the Gemini API, but this is an asynchronous operation that does not block the candidate's interaction.
+
+\section{Security Testing}
+\label{sec:security-tests}
+
+\begin{table}[htbp]
+\centering
+\caption{Security test results}
+\label{tab:security-tests}
+\small
+\begin{tabular}{p{2in}p{2in}p{1.5in}}
+\toprule
+\textbf{Vulnerability} & \textbf{Test Method} & \textbf{Result} \\
+\midrule
+Cross-Site Scripting (XSS) & Injected script tags in form fields & Sanitised; no execution \\
+SQL Injection & Injected SQL in search parameters & Parameterised queries; no effect \\
+Unauthorised API access & Called API without valid JWT & 401 Unauthorized returned \\
+Cross-tenant data access & Queried applications with another recruiter's ID & Empty result set \\
+Direct object reference & Accessed application by ID belonging to another candidate & 403 Forbidden returned \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Bug Report Summary}
+\label{sec:bugs}
+
+During testing, three notable bugs were identified and resolved:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Timer drift in MCQ engine}: The client-side countdown timer drifted by up to two seconds over a thirty-minute exam due to JavaScript's non-deterministic \texttt{setInterval} timing. This was resolved by computing remaining time from the difference between the current timestamp and the exam start timestamp rather than decrementing a counter.
+
+  \item \textbf{Supabase client re-instantiation}: Rapid navigation between pages caused multiple Supabase client instances to be created, leading to authentication state inconsistencies. The singleton pattern described in Chapter~5 resolved this issue.
+
+  \item \textbf{Kanban drag-and-drop race condition}: Rapidly dragging a candidate card between columns could trigger multiple simultaneous API calls, potentially resulting in inconsistent stage values. A debounce mechanism was added to prevent duplicate submissions.
+\end{enumerate}

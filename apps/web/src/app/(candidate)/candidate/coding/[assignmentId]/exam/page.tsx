@@ -4,7 +4,7 @@ import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { CodingExamIDE, CodingQuestion } from "@/components/coding/CodingExamIDE";
-import { Loader2, Clock, Trophy, ArrowRight } from "lucide-react";
+import { Loader2, Clock, Trophy, ArrowRight, CheckCircle2 } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
@@ -14,55 +14,48 @@ const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 
 const MOCK_CODING_QUESTION: CodingQuestion = {
   id: "q-101",
-  title: "Two Sum & Target Pair Finder",
+  title: "Concurrent Task Scheduler & Latency Aggregator",
   difficulty: "medium",
-  category: "Data Structures & Algorithms",
-  description: `Given an array of integers \`nums\` and an integer \`target\`, return the indices or values of the two numbers such that they add up to \`target\`.
+  category: "Algorithms & Concurrent Systems",
+  description: `Design and implement an efficient solution to process stream data metrics and schedule tasks concurrently.
 
-You may assume that each input would have exactly one solution, and you may not use the same element twice.
+### Requirements
+Given an array of integer latency metrics \`nums\` and a target threshold \`target\`, find two metrics whose sum equals \`target\`.
 
-Write an efficient algorithm to process the input string and return the result formatted as expected.`,
-  inputFormat: "First line contains array elements separated by space. Second line contains target integer.",
-  outputFormat: "Return the two elements or indices separated by space.",
-  constraints: "2 <= nums.length <= 10^4, -10^9 <= nums[i] <= 10^9",
+### Constraints
+- 2 <= nums.length <= 10^5
+- -10^9 <= nums[i] <= 10^9
+- Output the space-separated pair of numbers in ascending order.`,
+  inputFormat: "First line: space-separated array of integer metrics. Second line: target integer sum.",
+  outputFormat: "Space-separated pair of numbers in ascending order.",
+  constraints: "2 <= nums.length <= 10^5, -10^9 <= nums[i] <= 10^9",
   testCases: [
     {
       id: "tc-1",
       input: "2 7 11 15\n9",
       expectedOutput: "2 7",
-      explanation: "2 + 7 = 9, so target sum is reached.",
+      explanation: "2 + 7 = 9",
       isSample: true,
     },
     {
       id: "tc-2",
       input: "3 2 4\n6",
       expectedOutput: "2 4",
-      explanation: "2 + 4 = 6.",
+      explanation: "2 + 4 = 6",
       isSample: true,
     },
     {
       id: "tc-3",
       input: "3 3\n6",
       expectedOutput: "3 3",
-      explanation: "3 + 3 = 6.",
+      explanation: "3 + 3 = 6",
       isSample: true,
     },
   ],
   starterCode: {
-    python: `# Complete the function below
+    python: `# Complete the function below according to the PDF problem statement.
 def solve(input_data: str) -> str:
-    lines = input_data.strip().split('\\n')
-    if len(lines) < 2:
-        return "2 7"
-    nums = list(map(int, lines[0].split()))
-    target = int(lines[1].strip())
-    
-    seen = {}
-    for num in nums:
-        diff = target - num
-        if diff in seen:
-            return f"{diff} {num}"
-        seen[num] = True
+    # Write your solution logic here
     return ""`
   }
 };
@@ -74,7 +67,7 @@ export default function CandidateCodingExamPage() {
 
   const [loading, setLoading] = React.useState(true);
   const [scheduledStartTime, setScheduledStartTime] = React.useState<Date | null>(null);
-  const [durationMinutes, setDurationMinutes] = React.useState<number>(60);
+  const [durationMinutes, setDurationMinutes] = React.useState<number>(30);
   const [question, setQuestion] = React.useState<CodingQuestion>(MOCK_CODING_QUESTION);
   const [now, setNow] = React.useState(new Date());
   
@@ -93,24 +86,30 @@ export default function CandidateCodingExamPage() {
     return () => clearInterval(timer);
   }, []);
 
+  const [isAlreadyCompleted, setIsAlreadyCompleted] = React.useState(false);
+
   React.useEffect(() => {
     const loadAssignmentDetails = async () => {
       try {
-        const { data: assignment, error: assignErr } = await supabase
+        const { data: assignment } = await supabase
           .schema("assessment")
           .from("assignments")
           .select("id, assessment_id, scheduled_start_at, status")
           .eq("id", assignmentId)
-          .single();
+          .maybeSingle();
 
-        if (assignErr || !assignment) {
-          logger.error("Failed to load assignment details", assignErr);
+        if (assignment) {
+          if (assignment.status === "completed") {
+            setIsAlreadyCompleted(true);
+          }
+          if (assignment.scheduled_start_at) {
+            setScheduledStartTime(new Date(assignment.scheduled_start_at));
+          }
+        } else {
+          logger.error("Failed to load assignment details");
           return;
         }
 
-        if (assignment.scheduled_start_at) {
-          setScheduledStartTime(new Date(assignment.scheduled_start_at));
-        }
 
         // Load assessment template
         const { data: tmpl } = await supabase
@@ -133,12 +132,24 @@ export default function CandidateCodingExamPage() {
 
         if (questions && questions.length > 0) {
           const firstCoding = questions.find((q) => q.question_type === "coding") || questions[0];
+          
+          let cleanTitle = tmpl?.title || firstCoding.title || MOCK_CODING_QUESTION.title;
+          cleanTitle = cleanTitle
+            .replace(/\s*\([^)]+\.pdf\)/gi, "")
+            .replace(/Recruiter Uploaded Coding Problem Template PDF:\s*/gi, "")
+            .replace(/Question Bank/gi, "Assessment");
+
+          let cleanDesc = firstCoding.question_text || MOCK_CODING_QUESTION.description;
+          cleanDesc = cleanDesc
+            .replace(/^Refer to Recruiter Uploaded Problem & Coding Template PDF \([^)]+\)\.\s*/gi, "")
+            .replace(/Recruiter Uploaded Coding Problem Template PDF:\s*/gi, "");
+
           setQuestion({
             id: firstCoding.id,
-            title: tmpl?.title || firstCoding.question_text || "Coding Interview Assessment",
+            title: cleanTitle,
             difficulty: (firstCoding.difficulty as "easy" | "medium" | "hard") || "medium",
-            category: firstCoding.category || "Algorithms",
-            description: firstCoding.question_text || MOCK_CODING_QUESTION.description,
+            category: firstCoding.category === "Recruiter Template PDF" ? "Core Engineering" : (firstCoding.category || "Algorithms"),
+            description: cleanDesc,
             inputFormat: firstCoding.section || MOCK_CODING_QUESTION.inputFormat,
             outputFormat: MOCK_CODING_QUESTION.outputFormat,
             constraints: MOCK_CODING_QUESTION.constraints,
@@ -146,6 +157,7 @@ export default function CandidateCodingExamPage() {
               ? firstCoding.options
               : MOCK_CODING_QUESTION.testCases,
             starterCode: MOCK_CODING_QUESTION.starterCode,
+            pdfTemplateName: tmpl?.title?.includes(".pdf") ? tmpl.title : "Recruiter_Coding_Round_Template.pdf",
           });
         }
       } catch (err) {
@@ -192,6 +204,29 @@ export default function CandidateCodingExamPage() {
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#1e1e1e] text-zinc-100 gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
         <p className="text-xs font-mono text-zinc-400">Loading Built-in IDE Environment...</p>
+      </div>
+    );
+  }
+
+  if (isAlreadyCompleted) {
+    return (
+      <div className="min-h-screen bg-[#181818] text-zinc-100 flex flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md w-full bg-[#252526] border border-zinc-700/80 rounded-2xl p-8 space-y-6 shadow-2xl">
+          <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="h-8 w-8" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-xl font-extrabold text-zinc-100">Coding Exam Completed</h1>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              You have already completed and submitted this Coding IDE assessment. Each assessment round can only be taken once per application.
+            </p>
+          </div>
+          <Link href="/candidate/assessments" className="block">
+            <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-colors cursor-pointer">
+              Return to Candidate Portal
+            </button>
+          </Link>
+        </div>
       </div>
     );
   }

@@ -162,11 +162,27 @@ export function JobTable({
 
                   {/* Actions */}
                   <td className="px-4 py-4">
-                    <div className="flex items-center gap-1.5 justify-end">
+                    <div className="flex items-center gap-2 justify-end">
+                      <Link
+                        href={`/recruiter/pipeline?jobId=${job.id}`}
+                        className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-xs px-3 py-1.5 rounded-lg border border-blue-200 transition-all cursor-pointer shrink-0"
+                        title="Open Kanban Board"
+                      >
+                        Kanban Pipeline
+                      </Link>
+
+                      <Link
+                        href={`/recruiter/jobs/${job.id}/applications`}
+                        className="inline-flex items-center gap-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold text-xs px-3 py-1.5 rounded-lg border border-zinc-200 transition-all cursor-pointer shrink-0"
+                        title="View Candidates Roster"
+                      >
+                        Applicants
+                      </Link>
+
                       <Link
                         href={`/recruiter/jobs/${job.id}`}
-                        className="flex h-8 w-8 items-center justify-center rounded-[10px] text-[#AEAEB2] hover:bg-[#F5F5F7] hover:text-[#1D1D1F] transition-colors"
-                        title="View"
+                        className="flex h-8 w-8 items-center justify-center rounded-[10px] text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F] transition-colors"
+                        title="View Overview Details"
                       >
                         <ChevronRight className="h-4 w-4" />
                       </Link>
@@ -177,7 +193,7 @@ export function JobTable({
                             onClick={() =>
                               setActiveMenuId(isMenuOpen ? null : job.id)
                             }
-                            className="flex h-8 w-8 items-center justify-center rounded-[10px] text-[#AEAEB2] hover:bg-[#F5F5F7] hover:text-[#1D1D1F] transition-colors"
+                            className="flex h-8 w-8 items-center justify-center rounded-[10px] text-[#AEAEB2] hover:bg-[#F5F5F7] hover:text-[#1D1D1F] transition-colors cursor-pointer"
                             aria-label="More actions"
                           >
                             <MoreHorizontal className="h-4 w-4" />
@@ -190,9 +206,9 @@ export function JobTable({
                                     onActionClick(job, "publish");
                                     setActiveMenuId(null);
                                   }}
-                                  className="flex w-full px-4 py-2 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
+                                  className="flex w-full px-4 py-2 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors font-medium"
                                 >
-                                  Publish
+                                  Publish Job
                                 </button>
                               )}
                               {!isClosed && (
@@ -201,9 +217,9 @@ export function JobTable({
                                     onActionClick(job, "archive");
                                     setActiveMenuId(null);
                                   }}
-                                  className="flex w-full px-4 py-2 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
+                                  className="flex w-full px-4 py-2 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors font-medium"
                                 >
-                                  Archive
+                                  Archive Job
                                 </button>
                               )}
                               <div className="my-1 border-t border-[#E8E8ED]" />
@@ -212,9 +228,9 @@ export function JobTable({
                                   onActionClick(job, "delete");
                                   setActiveMenuId(null);
                                 }}
-                                className="flex w-full px-4 py-2 text-[13px] text-[#FF3B30] hover:bg-[#FFF0EE] transition-colors"
+                                className="flex w-full px-4 py-2 text-[13px] text-[#FF3B30] hover:bg-[#FFF0EE] transition-colors font-semibold"
                               >
-                                Delete
+                                Delete Job
                               </button>
                             </div>
                           )}

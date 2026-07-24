@@ -83,7 +83,7 @@ export default function RegisterPage() {
       subtitle={
         <span>
           Already have an account?{" "}
-          <Link href="/login" className="font-semibold text-blue-500 hover:text-blue-450 hover:underline">
+          <Link href="/login" className="font-bold text-blue-600 hover:text-blue-700 hover:underline transition-colors">
             Sign in
           </Link>
         </span>
@@ -91,7 +91,7 @@ export default function RegisterPage() {
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {errorMsg && (
-          <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs font-medium text-red-500">
+          <div className="rounded-xl bg-red-50 border border-red-200 p-3.5 text-xs font-semibold text-red-600 animate-in fade-in zoom-in-95">
             {errorMsg}
           </div>
         )}
@@ -139,11 +139,11 @@ export default function RegisterPage() {
 
         {/* Role Selection */}
         <div className="space-y-1.5 w-full text-left">
-          <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">
+          <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
             Account Type
           </label>
           <div className="grid grid-cols-3 gap-2">
-            <label className="flex items-center justify-center border border-zinc-250 dark:border-zinc-800 rounded-lg p-2.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950/80 cursor-pointer hover:border-blue-500 transition-colors [&:has(input:checked)]:border-blue-600 [&:has(input:checked)]:bg-blue-500/5">
+            <label className="flex items-center justify-center border border-zinc-300 rounded-xl p-2.5 text-xs font-semibold text-zinc-700 bg-white cursor-pointer hover:border-blue-600 transition-colors [&:has(input:checked)]:border-blue-600 [&:has(input:checked)]:bg-blue-50 [&:has(input:checked)]:text-blue-700">
               <input
                 type="radio"
                 value="candidate"
@@ -153,7 +153,7 @@ export default function RegisterPage() {
               />
               <span>Candidate</span>
             </label>
-            <label className="flex items-center justify-center border border-zinc-250 dark:border-zinc-800 rounded-lg p-2.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950/80 cursor-pointer hover:border-blue-500 transition-colors [&:has(input:checked)]:border-blue-600 [&:has(input:checked)]:bg-blue-500/5">
+            <label className="flex items-center justify-center border border-zinc-300 rounded-xl p-2.5 text-xs font-semibold text-zinc-700 bg-white cursor-pointer hover:border-blue-600 transition-colors [&:has(input:checked)]:border-blue-600 [&:has(input:checked)]:bg-blue-50 [&:has(input:checked)]:text-blue-700">
               <input
                 type="radio"
                 value="recruiter"
@@ -163,7 +163,7 @@ export default function RegisterPage() {
               />
               <span>Recruiter</span>
             </label>
-            <label className="flex items-center justify-center border border-zinc-250 dark:border-zinc-800 rounded-lg p-2.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950/80 cursor-pointer hover:border-blue-500 transition-colors [&:has(input:checked)]:border-blue-600 [&:has(input:checked)]:bg-blue-500/5">
+            <label className="flex items-center justify-center border border-zinc-300 rounded-xl p-2.5 text-xs font-semibold text-zinc-700 bg-white cursor-pointer hover:border-blue-600 transition-colors [&:has(input:checked)]:border-blue-600 [&:has(input:checked)]:bg-blue-50 [&:has(input:checked)]:text-blue-700">
               <input
                 type="radio"
                 value="company-admin"
@@ -182,8 +182,8 @@ export default function RegisterPage() {
 
         {/* Separator */}
         <div className="relative flex items-center justify-center my-4">
-          <div className="absolute inset-x-0 h-px bg-zinc-200 dark:bg-zinc-800/80" />
-          <span className="relative px-3 text-xs text-zinc-500 bg-white dark:bg-[#09090c] font-semibold uppercase tracking-wider">
+          <div className="absolute inset-x-0 h-px bg-zinc-200" />
+          <span className="relative px-3 text-[10px] text-zinc-500 bg-white font-bold uppercase tracking-wider">
             Or register with
           </span>
         </div>

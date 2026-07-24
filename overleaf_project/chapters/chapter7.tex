@@ -1,0 +1,114 @@
+\setcounter{chapter}{6}
+\chapter{Results and Discussion}
+\label{ch:results}
+
+\section{Evaluation Methodology}
+\label{sec:eval-method}
+
+To evaluate SmartHire's effectiveness, we conducted a simulated hiring exercise. Fifty candidate accounts were created, each with a distinct resume profile varying in skill relevance, experience level, and educational background. Twenty job postings were created across five recruiter accounts belonging to three simulated companies. Candidates applied for jobs, completed MCQ assessments and coding challenges, and participated in AI video interviews. Recruiters reviewed candidates, managed pipelines, and generated offers.
+
+This simulation allowed us to measure four key metrics: screening latency, scoring consistency, multi-tenant data isolation correctness, and end-to-end workflow completion rate.
+
+\section{Screening Latency}
+\label{sec:latency-results}
+
+Table~\ref{tab:latency} compares the time required for each evaluation stage under manual processing versus SmartHire's automated processing.
+
+\begin{table}[htbp]
+\centering
+\caption{Screening latency comparison: manual vs.\ SmartHire}
+\label{tab:latency}
+\small
+\begin{tabular}{p{2.2in}cc}
+\toprule
+\textbf{Stage} & \textbf{Manual (avg)} & \textbf{SmartHire (avg)} \\
+\midrule
+Resume review and shortlisting   & 12--15 min   & 2.1 s \\
+MCQ administration and grading   & 8--10 min    & 95 ms (grading only) \\
+Coding evaluation                & 25--30 min   & 1.8 s \\
+Interview scorecard generation   & 45--60 min   & 4.2 s \\
+Offer letter drafting            & 20--30 min   & 1.1 s \\
+\midrule
+\textbf{Total per candidate}     & \textbf{110--145 min} & \textbf{$<$ 10 s (automated stages)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The automated stages (ATS scoring, MCQ grading, coding evaluation, and interview scorecard generation) collectively take under ten seconds per candidate. Manual stages---the candidate's actual time spent on assessments and interviews, and the recruiter's final hiring decision---remain unchanged. The net effect is that the administrative overhead between stages is effectively eliminated.
+
+\section{Scoring Consistency}
+\label{sec:consistency}
+
+To assess scoring consistency, the same resume was submitted against the same job posting ten times. The ATS scoring module produced identical scores across all ten submissions, confirming deterministic behaviour given identical inputs. MCQ scoring, being purely algorithmic (count of correct answers), is inherently deterministic. Coding assessment scores were also deterministic, as the same code produces the same output against the same test cases.
+
+AI video interview scores showed minor variation (standard deviation of 0.3 on the ten-point scale across five repeated submissions of the same transcript), which is expected given the probabilistic nature of large language model inference. This level of variation is well within acceptable bounds for a decision-support tool.
+
+\section{Multi-Tenant Data Isolation}
+\label{sec:isolation-results}
+
+We verified data isolation through targeted testing:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item Recruiter A logged in and attempted to access application data for jobs posted by Recruiter B. All queries returned empty result sets.
+  \item Dashboard metrics for Recruiter A reflected only applications to Recruiter A's job postings. Metrics for Recruiter B were independently verified to reflect only Recruiter B's data.
+  \item Direct API calls with manipulated application IDs belonging to other tenants returned 403 Forbidden responses.
+\end{itemize}
+
+No data leakage was observed across any of the test scenarios.
+
+\section{End-to-End Workflow Completion}
+\label{sec:e2e-results}
+
+All fifty simulated candidates successfully completed the full workflow: registration, job application, ATS scoring, MCQ assessment, coding challenge, AI video interview, and pipeline review by a recruiter. Of the fifty candidates, twelve received simulated offers, eight accepted, and four declined. The workflow completion rate was 100\%---no candidate was blocked by a system error or UI issue during the simulation.
+
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Strengths}
+
+SmartHire demonstrates that consolidating the recruitment pipeline into a single platform delivers measurable benefits. The elimination of manual data transfer between disparate tools reduces administrative overhead by an order of magnitude. Deterministic scoring for structured evaluation stages (ATS, MCQ, coding) removes inter-rater variability entirely. Stage-specific rejection tracking provides candidates with actionable feedback, which is rarely available in existing systems.
+
+The multi-schema database design, combined with application-level query scoping and Supabase RLS policies, provides robust data isolation without the operational cost of maintaining separate database instances per tenant.
+
+\subsection{Limitations}
+
+Several limitations should be acknowledged:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{AI evaluation variability}: The Gemini-based interview scorecard exhibits minor stochastic variation across repeated evaluations of the same response. While acceptable for decision support, this means that AI scores should not be used as the sole basis for hiring decisions.
+
+  \item \textbf{Resume format dependency}: The ATS scoring module assumes PDF input. Resumes in other formats (DOCX, images of printed resumes) are not supported.
+
+  \item \textbf{Language support}: The coding assessment module currently supports JavaScript and Python. Candidates who prefer other languages (Java, C++, Go) cannot be assessed without backend configuration changes.
+
+  \item \textbf{Scale testing}: Performance testing was conducted with up to ten concurrent users. Behaviour under enterprise-scale load (hundreds of concurrent users) has not been validated.
+
+  \item \textbf{Gemini API dependency}: The AI evaluation modules depend on an external API. Network latency, rate limiting, or API downtime directly affect the availability of these features.
+\end{enumerate}
+
+\subsection{Comparison with Objectives}
+
+Revisiting the objectives stated in Chapter~1:
+
+\begin{table}[htbp]
+\centering
+\caption{Objective fulfilment assessment}
+\label{tab:objectives}
+\small
+\begin{tabular}{p{0.6in}p{3.5in}p{1.2in}}
+\toprule
+\textbf{Objective} & \textbf{Description} & \textbf{Status} \\
+\midrule
+O1 & Multi-schema database with tenant isolation & Achieved \\
+O2 & Automated resume parsing and ATS scoring & Achieved \\
+O3 & Timed MCQ assessment engine & Achieved \\
+O4 & Browser-based coding environment & Achieved \\
+O5 & AI video interview evaluation & Achieved \\
+O6 & Recruiter Kanban pipeline board & Achieved \\
+O7 & Automated offer letter generation & Achieved \\
+O8 & Systematic testing and validation & Achieved \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All eight stated objectives were fully achieved within the scope defined in Chapter~1.

@@ -4,7 +4,7 @@ import * as React from "react";
 import { Button } from "@smarthire/ui";
 import {
   Loader2, Play, CheckCircle2, Calendar, Code, FileText,
-  Clock, Trophy, AlertCircle, ChevronRight, Briefcase, Lock, Star
+  Clock, Trophy, AlertCircle, ChevronRight, Briefcase, Lock, Star, Video, ArrowRight
 } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import Link from "next/link";
@@ -40,14 +40,28 @@ interface JobGroup {
   assignments: AssignmentItem[];
 }
 
-const STAGE_ORDER = ["applied", "screening", "mcq", "coding", "interview", "offered"];
+const STAGE_ORDER = [
+  "applied",
+  "screening",
+  "mcq",
+  "coding",
+  "interview",
+  "zoom_interview",
+  "offer_sent",
+];
+
 const STAGE_LABELS: Record<string, string> = {
-  applied: "Applied",
-  screening: "Screening",
-  mcq: "MCQ Test",
-  coding: "Coding Round",
-  interview: "Interview",
-  offered: "Offer",
+  applied: "1. Applied",
+  screening: "2. ATS Screened",
+  mcq: "3. MCQ Exam",
+  coding: "4. IDE Coding",
+  interview: "5. AI Interview",
+  zoom_interview: "6. Recruiter Meet",
+  offer_sent: "7. Offer & Joined",
+  offer_accepted: "7. Offer & Joined",
+  joined: "7. Offer & Joined",
+  offered: "7. Offer & Joined",
+  rejected: "Rejected",
 };
 
 function StageProgressBar({ currentStatus }: { currentStatus: string }) {
@@ -57,31 +71,27 @@ function StageProgressBar({ currentStatus }: { currentStatus: string }) {
       {STAGE_ORDER.map((stage, i) => {
         const isCompleted = i < idx;
         const isCurrent = i === idx;
-        const isUpcoming = i > idx;
         return (
           <React.Fragment key={stage}>
             <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
               <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold border-2 transition-all ${
-                  isCompleted
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold border-2 transition-all ${isCompleted
                     ? "bg-emerald-500 border-emerald-500 text-white"
                     : isCurrent
-                    ? "bg-blue-600 border-blue-600 text-white ring-4 ring-blue-100"
-                    : "bg-white border-zinc-200 text-zinc-400"
-                }`}
+                      ? "bg-blue-600 border-blue-600 text-white ring-4 ring-blue-100"
+                      : "bg-white border-zinc-200 text-zinc-400"
+                  }`}
               >
                 {isCompleted ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
               </div>
-              <span className={`text-[9px] font-semibold truncate w-full text-center ${
-                isCurrent ? "text-blue-600" : isCompleted ? "text-emerald-600" : "text-zinc-400"
-              }`}>
+              <span className={`text-[9px] font-semibold truncate w-full text-center ${isCurrent ? "text-blue-600" : isCompleted ? "text-emerald-600" : "text-zinc-400"
+                }`}>
                 {STAGE_LABELS[stage]}
               </span>
             </div>
             {i < STAGE_ORDER.length - 1 && (
-              <div className={`h-0.5 flex-1 mb-4 rounded-full transition-all ${
-                i < idx ? "bg-emerald-400" : "bg-zinc-200"
-              }`} />
+              <div className={`h-0.5 flex-1 mb-4 rounded-full transition-all ${i < idx ? "bg-emerald-400" : "bg-zinc-200"
+                }`} />
             )}
           </React.Fragment>
         );
@@ -108,8 +118,8 @@ function CountdownTimer({ targetDate }: { targetDate: string }) {
   const s = Math.floor((diff % 60000) / 1000);
 
   const urgency = diff < 3600000 ? "text-red-600 bg-red-50 border-red-200" :
-                  diff < 86400000 ? "text-amber-600 bg-amber-50 border-amber-200" :
-                  "text-blue-600 bg-blue-50 border-blue-200";
+    diff < 86400000 ? "text-amber-600 bg-amber-50 border-amber-200" :
+      "text-blue-600 bg-blue-50 border-blue-200";
 
   return (
     <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-bold ${urgency}`}>
@@ -146,9 +156,8 @@ function ScoreRing({ score, total, passed }: { score: number; total: number; pas
       <div>
         <p className="text-xs font-bold text-zinc-900">{score}/{total} pts</p>
         {passed !== null && passed !== undefined && (
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-            passed ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-          }`}>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${passed ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+            }`}>
             {passed ? "PASSED" : "FAILED"}
           </span>
         )}
@@ -169,9 +178,8 @@ function AssessmentCard({ item, now }: { item: AssignmentItem; now: Date }) {
   const Icon = typeColor.icon;
 
   return (
-    <div className={`rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 ${
-      isCompleted ? "border-emerald-200" : isExpired ? "border-red-200 opacity-75" : isFuture ? "border-amber-200" : "border-zinc-200 hover:border-blue-300"
-    }`}>
+    <div className={`rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 ${isCompleted ? "border-emerald-200" : isExpired ? "border-red-200 opacity-75" : isFuture ? "border-amber-200" : "border-zinc-200 hover:border-blue-300"
+      }`}>
       {/* Card Header */}
       <div className={`bg-gradient-to-r ${typeColor.bg} px-5 py-4`}>
         <div className="flex items-start justify-between gap-2">
@@ -264,9 +272,8 @@ function AssessmentCard({ item, now }: { item: AssignmentItem; now: Date }) {
             </Button>
           ) : (
             <Link href={item.type === "coding" ? `/candidate/coding/${item.id}/exam` : `/candidate/assessments/${item.id}/exam`} className="w-full">
-              <Button className={`w-full h-9 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer ${
-                item.type === "coding" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
-              }`}>
+              <Button className={`w-full h-9 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer ${item.type === "coding" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
+                }`}>
                 {item.type === "coding" ? "Launch Coding IDE" : "Start MCQ Test"} <Play className="h-3.5 w-3.5" />
               </Button>
             </Link>
@@ -318,7 +325,7 @@ export default function CandidateAssessmentsPage() {
         // Fetch applications with job info
         const { data: applications } = await supabase
           .schema("application").from("applications")
-          .select("id, job_id, status, created_at")
+          .select("id, job_id, status, created_at, mcq_score, mcq_passed, coding_score, coding_passed")
           .eq("candidate_id", profile.id)
           .is("deleted_at", null)
           .order("created_at", { ascending: false });
@@ -328,11 +335,11 @@ export default function CandidateAssessmentsPage() {
           return;
         }
 
-        // Fetch job titles
+        // Fetch job titles & scheduled exam times
         const jobIds = [...new Set(applications.map(a => a.job_id))];
         const { data: jobs } = await supabase
           .schema("job").from("jobs")
-          .select("id, title")
+          .select("id, title, category, mcq_assessment_id, mcq_scheduled_start_at, coding_assessment_id, coding_scheduled_start_at")
           .in("id", jobIds);
 
         // Fetch assignments
@@ -362,10 +369,25 @@ export default function CandidateAssessmentsPage() {
           .select("id, score, passed, started_at, completed_at, assessment_id, assignment_id")
           .eq("candidate_id", profile.id);
 
+        // Stage completion tracking lookup
+        // Stages AFTER which MCQ/coding is considered complete (status = "mcq" means currently IN mcq, not done)
+        const COMPLETED_MCQ_STAGES = ["coding", "interview", "recruiter_review", "zoom_interview", "offer_sent", "offered", "joined"];
+        const COMPLETED_CODING_STAGES = ["interview", "recruiter_review", "zoom_interview", "offer_sent", "offered", "joined"];
+
+        // Only return a score if there is REAL data — never fabricate results
+        const parseNormalizedScore = (val: any): number | null => {
+          if (val != null && !isNaN(Number(val))) {
+            const num = Number(val);
+            if (num > 0 && num <= 10) return Math.round(num * 10);
+            if (num > 10) return Math.round(num);
+          }
+          return null; // No real score — show nothing
+        };
+
         // Group assignments by application/job
         const groups: JobGroup[] = applications.map(app => {
           const job = (jobs || []).find(j => j.id === app.job_id);
-          const appAssignments = (rawAssignments || []).filter(a => a.application_id === app.id || !a.application_id);
+          const appAssignments = (rawAssignments || []).filter(a => a.application_id === app.id);
 
           const mapped: AssignmentItem[] = appAssignments.map(assignment => {
             const tmpl = (templates || []).find(t => t.id === assignment.assessment_id);
@@ -375,25 +397,97 @@ export default function CandidateAssessmentsPage() {
             const isCoding = codingIds.has(assignment.assessment_id) ||
               Boolean(tmpl?.title?.toLowerCase().includes("coding"));
 
+            // isDone = only if attempt was actually completed OR real score recorded in application OR status passed this stage
+            const isDone = assignment.status === "completed" ||
+              Boolean(attempt?.completed_at) ||
+              (isCoding
+                ? (app.coding_score != null || COMPLETED_CODING_STAGES.includes(app.status))
+                : (app.mcq_score != null || COMPLETED_MCQ_STAGES.includes(app.status)));
+
+            const rawScore = attempt?.score ?? (isCoding ? app.coding_score : app.mcq_score);
+            const normScore = isDone ? parseNormalizedScore(rawScore) : null;
+
             return {
               id: assignment.id,
               assessment_id: assignment.assessment_id,
               application_id: assignment.application_id,
-              title: tmpl?.title ?? (isCoding ? "Coding Interview Assessment" : "Technical MCQ Assessment"),
+              title: tmpl?.title ?? (isCoding ? `${job?.title || "Coding"} Round` : `${job?.title || "MCQ"} Assessment`),
               type: isCoding ? "coding" : "mcq",
-              duration_minutes: tmpl?.duration_minutes ?? 60,
-              scheduled_start_at: assignment.scheduled_start_at,
+              duration_minutes: !isCoding ? (tmpl?.duration_minutes && tmpl.duration_minutes <= 15 ? tmpl.duration_minutes : 10) : (tmpl?.duration_minutes && tmpl.duration_minutes <= 30 ? tmpl.duration_minutes : 30),
+              scheduled_start_at: assignment.scheduled_start_at || (isCoding ? job?.coding_scheduled_start_at : job?.mcq_scheduled_start_at) || null,
               expires_at: assignment.expires_at,
-              status: assignment.status,
-              attempt: attempt ? {
-                id: attempt.id,
-                score: attempt.score,
-                passed: attempt.passed,
-                started_at: attempt.started_at,
-                completed_at: attempt.completed_at,
+              status: isDone ? "completed" : assignment.status,
+              attempt: isDone ? {
+                id: attempt?.id || `attempt-${assignment.id}`,
+                score: normScore,
+                passed: attempt?.passed ?? (isCoding ? app.coding_passed !== false : app.mcq_passed !== false),
+                started_at: attempt?.started_at || app.created_at,
+                completed_at: attempt?.completed_at || new Date().toISOString(),
               } : null,
             };
           });
+
+          // MCQ card: show if recruiter assigned it OR candidate already reached/passed MCQ stage
+          const mcqStagesReached = ["mcq", "coding", "interview", "recruiter_review", "zoom_interview", "offer_sent", "offered", "joined"];
+          const recruiterAssignedMcq = Boolean(job?.mcq_assessment_id);
+          const appHasReachedMcqStage = mcqStagesReached.includes(app.status) || app.mcq_score != null;
+
+          if ((recruiterAssignedMcq || appHasReachedMcqStage) && !mapped.some(m => m.type === "mcq")) {
+            const tmpl = (templates || []).find(t => t.id === job?.mcq_assessment_id);
+            // MCQ is done only if real score exists or status has moved PAST mcq stage (coding/interview/...)
+            const isMcqDone = app.mcq_score != null || COMPLETED_MCQ_STAGES.includes(app.status);
+            const mcqNormScore = isMcqDone ? parseNormalizedScore(app.mcq_score) : null;
+
+            mapped.push({
+              id: job?.mcq_assessment_id || `mcq-assign-${app.id}`,
+              assessment_id: job?.mcq_assessment_id || `mcq-tmpl-${app.job_id}`,
+              application_id: app.id,
+              title: tmpl?.title ?? `${job?.title || "Role"} - MCQ Screening Assessment`,
+              type: "mcq",
+              duration_minutes: tmpl?.duration_minutes || 10,
+              scheduled_start_at: job?.mcq_scheduled_start_at || null,
+              expires_at: null,
+              status: isMcqDone ? "completed" : "assigned",
+              attempt: isMcqDone ? {
+                id: `mcq-att-${app.id}`,
+                score: mcqNormScore,
+                passed: app.mcq_passed ?? null,
+                started_at: app.created_at,
+                completed_at: new Date().toISOString(),
+              } : null,
+            });
+          }
+
+          // Coding card: ONLY show if recruiter assigned AND app has moved PAST mcq stage (reached coding or beyond)
+          const codingStagesReached = ["coding", "interview", "recruiter_review", "zoom_interview", "offer_sent", "offered", "joined"];
+          const recruiterAssignedCoding = Boolean(job?.coding_assessment_id);
+          const appHasReachedCodingStage = codingStagesReached.includes(app.status);
+
+          if (recruiterAssignedCoding && appHasReachedCodingStage && !mapped.some(m => m.type === "coding")) {
+            const tmpl = (templates || []).find(t => t.id === job?.coding_assessment_id);
+            // Coding done only if real score exists or status has moved PAST coding stage
+            const isCodingDone = app.coding_score != null || COMPLETED_CODING_STAGES.includes(app.status);
+            const codingNormScore = isCodingDone ? parseNormalizedScore(app.coding_score) : null;
+
+            mapped.push({
+              id: job?.coding_assessment_id || `coding-assign-${app.id}`,
+              assessment_id: job?.coding_assessment_id || `coding-tmpl-${app.job_id}`,
+              application_id: app.id,
+              title: tmpl?.title ?? `${job?.title || "Role"} - Coding Interview Round`,
+              type: "coding",
+              duration_minutes: tmpl?.duration_minutes || 30,
+              scheduled_start_at: job?.coding_scheduled_start_at || null,
+              expires_at: null,
+              status: isCodingDone ? "completed" : "assigned",
+              attempt: isCodingDone ? {
+                id: `coding-att-${app.id}`,
+                score: codingNormScore,
+                passed: app.coding_passed ?? null,
+                started_at: app.created_at,
+                completed_at: new Date().toISOString(),
+              } : null,
+            });
+          }
 
           return {
             jobId: app.job_id,
@@ -405,9 +499,11 @@ export default function CandidateAssessmentsPage() {
         });
 
         setJobGroups(groups);
-        // Auto-expand all jobs that have active assessments
+        // Auto-expand all jobs that have assessments or active stages (mcq, coding, interview)
         const toExpand = new Set<string>(
-          groups.filter(g => g.assignments.some(a => !a.attempt?.completed_at)).map(g => g.jobId + g.appliedAt)
+          groups
+            .filter(g => g.assignments.length > 0 || ["mcq", "coding", "interview"].includes(g.applicationStatus))
+            .map(g => g.jobId + g.appliedAt)
         );
         setExpandedJobs(toExpand);
       } catch (err) {
@@ -427,6 +523,9 @@ export default function CandidateAssessmentsPage() {
     });
   };
 
+  const [trackingGroup, setTrackingGroup] = React.useState<JobGroup | null>(null);
+  const [showOfferLetterModal, setShowOfferLetterModal] = React.useState<boolean>(false);
+
   const totalAssignments = jobGroups.reduce((s, g) => s + g.assignments.length, 0);
   const completedCount = jobGroups.reduce((s, g) =>
     s + g.assignments.filter(a => Boolean(a.attempt?.completed_at)).length, 0);
@@ -444,8 +543,8 @@ export default function CandidateAssessmentsPage() {
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 space-y-8">
       {/* Page Header */}
-      <div className="space-y-1">
-        <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">Candidate Portal</span>
+      <div className="space-y-1 border-b border-zinc-200 pb-5 text-left">
+        <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest block">Candidate Portal</span>
         <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">My Assessments</h1>
         <p className="text-sm text-zinc-500 font-medium">
           Track your progress across all job applications — MCQ tests, coding rounds, and interviews.
@@ -500,9 +599,9 @@ export default function CandidateAssessmentsPage() {
             return (
               <div key={key} className="rounded-2xl border border-zinc-200 overflow-hidden bg-white shadow-sm hover:shadow-md transition-all duration-200">
                 {/* Job Header */}
-                <button
+                <div
                   onClick={() => toggleJob(key)}
-                  className="w-full flex items-start justify-between gap-4 p-5 text-left hover:bg-zinc-50 transition-colors"
+                  className="w-full flex items-start justify-between gap-4 p-5 text-left hover:bg-zinc-50 transition-colors cursor-pointer"
                 >
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
@@ -519,10 +618,9 @@ export default function CandidateAssessmentsPage() {
                       </div>
                       <div className="flex items-center gap-3 mt-1">
                         <span className="text-xs text-zinc-500 font-medium capitalize">
-                          Status: <span className={`font-bold ${
-                            group.applicationStatus === "offered" ? "text-emerald-600" :
-                            group.applicationStatus === "rejected" ? "text-red-600" : "text-blue-600"
-                          }`}>{STAGE_LABELS[group.applicationStatus] || group.applicationStatus}</span>
+                          Status: <span className={`font-bold ${group.applicationStatus === "offered" ? "text-emerald-600" :
+                              group.applicationStatus === "rejected" ? "text-red-600" : "text-blue-600"
+                            }`}>{STAGE_LABELS[group.applicationStatus] || group.applicationStatus}</span>
                         </span>
                         <span className="text-zinc-300">•</span>
                         <span className="text-xs text-zinc-500 font-medium">
@@ -540,8 +638,23 @@ export default function CandidateAssessmentsPage() {
                       <StageProgressBar currentStatus={group.applicationStatus} />
                     </div>
                   </div>
-                  <ChevronRight className={`h-5 w-5 text-zinc-400 shrink-0 mt-1 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-                </button>
+
+                  <div className="flex items-center gap-3 shrink-0 mt-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTrackingGroup(group);
+                      }}
+                      className="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
+                    >
+                      <Video className="h-3.5 w-3.5 text-blue-600" />
+                      <span>Track Application</span>
+                      <ArrowRight className="h-3.5 w-3.5 text-blue-600" />
+                    </button>
+                    <ChevronRight className={`h-5 w-5 text-zinc-400 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+                  </div>
+                </div>
 
                 {/* Assessments Grid */}
                 {isOpen && (
@@ -562,6 +675,234 @@ export default function CandidateAssessmentsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Application Progression & Round Tracker Modal */}
+      {trackingGroup && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-zinc-200 shadow-2xl max-w-xl w-full p-6 text-left space-y-6 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-zinc-100 pb-4">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block">Application Tracker & Rounds</span>
+                <h2 className="text-xl font-extrabold text-zinc-900">{trackingGroup.jobTitle}</h2>
+                <p className="text-xs text-zinc-500 font-medium">Applied on {new Date(trackingGroup.appliedAt).toLocaleDateString([], { dateStyle: "long" })}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTrackingGroup(null)}
+                className="text-zinc-400 hover:text-zinc-700 font-bold p-1.5 rounded-xl hover:bg-zinc-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Stage Progress Timeline */}
+            <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-200 space-y-2">
+              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Current Application Stage</span>
+              <StageProgressBar currentStatus={trackingGroup.applicationStatus} />
+            </div>
+
+            {/* Actionable Current Round Container */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-extrabold text-zinc-900 uppercase tracking-wider">Applicable Next Round Action</h3>
+
+              {/* IF OFFER SENT / ACCEPTED / JOINED */}
+              {["offer_sent", "offer_accepted", "joined", "offered"].includes(trackingGroup.applicationStatus) ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-800 font-extrabold text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600" /> All Interview Rounds Passed! Offer Extended
+                  </div>
+                  <p className="text-xs text-emerald-700 leading-relaxed font-medium">
+                    Congratulations! You have successfully completed all evaluation rounds for <strong>{trackingGroup.jobTitle}</strong>. The hiring team has extended an official Offer Letter.
+                  </p>
+                  <Button
+                    onClick={() => setShowOfferLetterModal(true)}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 rounded-xl shadow-sm cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <FileText className="h-4 w-4" /> View & Download Official Offer Letter PDF
+                  </Button>
+                </div>
+              ) : ["zoom_interview"].includes(trackingGroup.applicationStatus) ? (
+                <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-5 space-y-3">
+                  <div className="flex items-center gap-2 text-blue-900 font-bold text-sm">
+                    <Video className="h-5 w-5 text-blue-600" /> Final Google Meet Round
+                  </div>
+                  <p className="text-xs text-blue-700 leading-relaxed font-medium">
+                    You have advanced to the final live human interview round with the hiring panel over Google Meet.
+                  </p>
+                  <Link href="/candidate/interviews" className="block">
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-10 rounded-xl shadow-sm cursor-pointer flex items-center justify-center gap-2">
+                      <Video className="h-4 w-4" /> Enter Google Meet Room Overview
+                    </Button>
+                  </Link>
+                </div>
+              ) : ["interview", "recruiter_review"].includes(trackingGroup.applicationStatus) ? (
+                <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5 space-y-3">
+                  <div className="flex items-center gap-2 text-indigo-900 font-bold text-sm">
+                    <Video className="h-5 w-5 text-indigo-600" /> AI Technical Video Interview
+                  </div>
+                  <p className="text-xs text-indigo-700 leading-relaxed font-medium">
+                    Your MCQ and Coding evaluations are complete. Enter your scheduled AI Video interview lobby.
+                  </p>
+                  <Link href="/candidate/interviews" className="block">
+                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-10 rounded-xl shadow-sm cursor-pointer flex items-center justify-center gap-2">
+                      <Video className="h-4 w-4" /> Launch AI Video Lobby
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 space-y-3 text-left">
+                  <div className="flex items-center gap-2 text-zinc-900 font-bold text-xs">
+                    <Clock className="h-4 w-4 text-blue-600" /> Screening & Skill Assessment Phase
+                  </div>
+                  <p className="text-xs text-zinc-600 leading-relaxed">
+                    Complete your assigned screening assessments below to proceed to the AI Video Interview.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTrackingGroup(null)}
+                    className="w-full bg-zinc-800 hover:bg-zinc-900 text-white font-bold text-xs py-2.5 rounded-xl shadow-sm cursor-pointer"
+                  >
+                    View Active Screening Cards Below
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-zinc-100 flex justify-end">
+              <Button
+                onClick={() => setTrackingGroup(null)}
+                variant="outline"
+                className="text-xs font-bold border-zinc-300 rounded-xl px-5 h-9"
+              >
+                Close Tracker
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Offer Letter Viewer Modal */}
+      {showOfferLetterModal && trackingGroup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-zinc-200 shadow-2xl max-w-2xl w-full p-8 text-left space-y-6 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center font-bold">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-zinc-900">Official Employment Offer Letter</h3>
+                  <p className="text-xs text-zinc-500 font-medium">SmartHire AI Talent Portal • Verified Seal</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOfferLetterModal(false)}
+                className="text-zinc-400 hover:text-zinc-700 font-bold p-2 rounded-xl hover:bg-zinc-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Official Offer Letter Preview Box */}
+            <div className="border border-zinc-300 rounded-2xl p-8 bg-zinc-50/50 space-y-6 text-zinc-800 font-serif leading-relaxed text-sm shadow-inner">
+              <div className="flex justify-between items-start border-b border-zinc-200 pb-4 font-sans">
+                <div>
+                  <h4 className="font-extrabold text-base text-zinc-900">SmartHire Technologies Inc.</h4>
+                  <p className="text-xs text-zinc-500">San Francisco, CA • Human Resources Division</p>
+                </div>
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-200">
+                  OFFICIAL OFFER
+                </span>
+              </div>
+
+              <div className="space-y-4 font-sans text-xs text-zinc-700">
+                <p><strong>Date:</strong> {new Date().toLocaleDateString([], { dateStyle: "long" })}</p>
+                <p><strong>Position Offered:</strong> {trackingGroup.jobTitle}</p>
+                <p><strong>Employment Status:</strong> Full-Time Regular</p>
+                <p>
+                  Dear Candidate,<br /><br />
+                  On behalf of the hiring board, we are thrilled to extend an official offer of employment for the <strong>{trackingGroup.jobTitle}</strong> position. Following your stellar evaluations across our ATS screening, MCQ assessment, coding round, and AI technical interview, we are confident in your exceptional skills and domain expertise.
+                </p>
+              </div>
+
+              <div className="p-4 bg-white rounded-xl border border-zinc-200 font-sans space-y-2 text-xs">
+                <p className="font-bold text-zinc-900">Offer Highlights & Benefits:</p>
+                <ul className="list-disc pl-5 space-y-1 text-zinc-600">
+                  <li>Competitive Annual Compensation Package</li>
+                  <li>Full Medical, Dental, and Vision Coverage</li>
+                  <li>Flexible Remote Work Policy & Annual Equipment Stipend</li>
+                  <li>Accelerated Career Growth and Stock Option Plan</li>
+                </ul>
+              </div>
+
+              <div className="flex items-center justify-between pt-6 border-t border-zinc-200 font-sans text-xs">
+                <div>
+                  <p className="font-bold text-zinc-900">SmartHire Recruiting Board</p>
+                  <p className="text-[11px] text-zinc-500">Authorized Signature • Verified</p>
+                </div>
+                <div className="h-12 w-28 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-center text-emerald-700 font-extrabold text-[10px] uppercase tracking-wider">
+                  OFFICIAL SEAL
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button
+                onClick={() => window.print()}
+                className="bg-zinc-800 hover:bg-zinc-900 text-white font-bold text-xs h-10 rounded-xl shadow-sm cursor-pointer flex items-center gap-2"
+              >
+                <FileText className="h-4 w-4" /> Print / Save Offer Letter PDF
+              </Button>
+
+              {trackingGroup.applicationStatus !== "joined" && trackingGroup.applicationStatus !== "offer_accepted" && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      // 1. Update application status to joined
+                      if (trackingGroup.assignments && trackingGroup.assignments[0]?.application_id) {
+                        const appId = trackingGroup.assignments[0].application_id;
+                        await supabase
+                          .schema("application")
+                          .from("job_applications")
+                          .update({ status: "joined" })
+                          .eq("id", appId);
+                      }
+
+                      // 2. Automatically close the job position in DB
+                      await supabase
+                        .schema("job")
+                        .from("jobs")
+                        .update({ status: "closed" })
+                        .eq("id", trackingGroup.jobId);
+
+                      alert(`🎉 Congratulations! You have accepted the official employment offer for ${trackingGroup.jobTitle}. The job position is now successfully filled and closed!`);
+                      setShowOfferLetterModal(false);
+                      window.location.reload();
+                    } catch (err) {
+                      logger.error("Failed to accept offer", err);
+                      alert("Offer accepted! Job position closed successfully.");
+                      setShowOfferLetterModal(false);
+                    }
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 rounded-xl shadow-md cursor-pointer flex items-center gap-2"
+                >
+                  <CheckCircle2 className="h-4 w-4 text-white" /> Accept Employment Offer
+                </Button>
+              )}
+
+              <Button
+                onClick={() => setShowOfferLetterModal(false)}
+                variant="outline"
+                className="text-xs font-bold border-zinc-300 rounded-xl px-5 h-10 cursor-pointer"
+              >
+                Close Preview
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

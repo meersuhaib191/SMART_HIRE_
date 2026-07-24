@@ -1,0 +1,59 @@
+\setcounter{chapter}{0}
+\chapter{Introduction}
+\label{ch:intro}
+
+\section{Background}
+\label{sec:background}
+
+The process of identifying, evaluating, and hiring qualified software engineering talent is central to modern technology enterprise success. In today's hyper-competitive global marketplace, software engineering organizations must rapidly evaluate candidates while maintaining high selection standards. However, conventional hiring practices rely heavily on manual human intervention at every stage of the recruitment funnel. A typical technical hiring workflow involves sequential stages: sourcing candidates, screening resumes, administering online assessments, conducting technical interviews, and extending offer letters.
+
+Each of these stages has traditionally been handled by a different tool or manual process. Resume screening is performed manually or through rudimentary keyword matching. Coding assessments are administered on third-party platforms operating independently of the applicant tracking system (ATS). Video interviews are conducted over general-purpose conferencing tools, with evaluators recording scores manually. This fragmentation creates significant operational friction: candidate data is scattered across platforms, score aggregation introduces errors and delays, candidates receive no feedback when rejected, and recruiters spend excess time on administrative coordination rather than substantive evaluation.
+
+\section{Evolution of Recruitment Technology}
+\label{sec:evolution}
+
+Recruitment technology has evolved through distinct technological phases:
+
+\textbf{Manual and Paper-Based Systems (Pre-2000):} Applications arrived as physical documents reviewed by hand. Shortlisting decisions relied on subjective evaluation with no standardized scoring, leading to hiring cycles of sixty to ninety days~\cite{cappelli2019}.
+
+\textbf{Early Digital Systems (2000--2010):} First-generation Applicant Tracking Systems digitised resume collection, allowing recruiters to search stored documents via keyword queries. However, these systems functioned as passive document repositories without automated candidate evaluation capabilities~\cite{cappelli2019}.
+
+\textbf{Cloud-Based Recruitment Platforms (2010--2020):} Cloud platforms like Greenhouse and Lever introduced structured hiring workflows and API integrations with specialized coding portals (HackerRank, Codility) and video interview tools (HireVue)~\cite{hmoud2020}. Despite these advances, platforms remained fragmented, requiring manual data transfer across vendor tools.
+
+\textbf{AI-Augmented Recruitment (2020--Present):} Modern systems leverage natural language processing and machine learning for automated resume parsing, semantic relevance scoring, and audio-visual interview evaluation~\cite{black2020}. SmartHire belongs to this generation, unifying ATS candidate tracking, resume scoring, MCQ assessment, coding evaluation, AI video analysis, and offer management into a single platform.
+
+\section{Problems with Existing Technical Hiring Practices}
+\label{sec:problems}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{Prolonged Hiring Cycles:} Average time-to-fill for technical roles ranges from 42 to 68 days~\cite{shrm2022}, driven by administrative coordination delays.
+  \item \textbf{Evaluation Bias and Inconsistency:} Manual resume screening exhibits low inter-rater reliability, leading to subjective candidate disqualification~\cite{kuncel2013}.
+  \item \textbf{Lack of Candidate Transparency:} Rejected applicants rarely receive actionable feedback regarding their evaluation stage.
+  \item \textbf{High Tooling Costs:} Subscribing to separate ATS, coding, and interview tools incurs high annual vendor licensing costs.
+\end{itemize}
+
+\section{Motivation and Problem Statement}
+\label{sec:problem-statement}
+
+The motivation for SmartHire stems from the need to eliminate administrative overhead in technical hiring while maintaining evaluation objectivity and candidate transparency.
+
+\textit{Problem Statement: Design and implement a web-based recruitment platform that integrates applicant tracking, automated resume scoring, timed assessments, browser-based code execution, AI-driven video interview evaluation, and offer letter generation into a unified multi-tenant system.}
+
+\section{Objectives}
+\label{sec:objectives}
+
+\begin{enumerate}[label=\textbf{O\arabic*.}, leftmargin=1.8em]
+  \item Implement a multi-schema PostgreSQL architecture isolating data across recruiting organisations.
+  \item Develop an automated ATS resume parsing and scoring module (0--10 scale).
+  \item Construct a timed MCQ examination engine with auto-submission.
+  \item Build an interactive web coding IDE (Monaco editor) with real-time test case execution.
+  \item Integrate AI video interview evaluation generating structured scorecards via Gemini API.
+  \item Design a recruiter Kanban pipeline board with stage-specific rejection tracking.
+  \item Implement automated PDF offer letter generation with digital signature fields.
+  \item Validate system performance and multi-tenant data isolation.
+\end{enumerate}
+
+\section{Organisation of the Report}
+\label{sec:organisation}
+
+The report is structured as follows: Chapter~2 surveys literature and commercial systems; Chapter~3 specifies functional and non-functional requirements; Chapter~4 details system design and database architecture; Chapter~5 presents module implementations; Chapter~6 documents testing and verification; Chapter~7 presents empirical results and discussion; Chapter~8 concludes with future enhancements.

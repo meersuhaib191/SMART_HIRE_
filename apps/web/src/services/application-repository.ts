@@ -32,7 +32,7 @@ export const applicationRepository = {
 
     let query = supabase
       .from("applications")
-      .select("id, job_id, candidate_id, resume_id, status, score, screening_score, mcq_score, mcq_total, mcq_passed, coding_score, coding_total, coding_passed, interview_avg_score, interview_recommendation, created_at, updated_at, deleted_at")
+      .select("*")
       .is("deleted_at", null);
 
     if (filters.status) {
@@ -114,27 +114,38 @@ export const applicationRepository = {
   /**
    * Update application status state
    */
-  updateApplicationStatus: async (applicationId: string, status: string) => {
-    logger.info(`Repository: Transitioning status of application ${applicationId} to ${status}`);
+  updateApplicationStatus: async (applicationId: string, status: string, rejectionStage?: string | null) => {
+    logger.info(`Repository: Transitioning status of application ${applicationId} to ${status} (rejectionStage: ${rejectionStage})`);
     const supabase = await createAppClient();
     const now = new Date().toISOString();
 
+    const updatePayload: Record<string, any> = {
+      status,
+      updated_at: now,
+    };
+    if (rejectionStage !== undefined) {
+      updatePayload.rejection_stage = rejectionStage;
+    }
+
     const { data, error } = await supabase
       .from("applications")
-      .update({
-        status,
-        updated_at: now,
-      })
+      .update(updatePayload)
       .eq("id", applicationId)
       .is("deleted_at", null)
-      .select()
-      .single();
+      .select();
 
     if (error) {
       logger.error("Repository error: updateApplicationStatus failed", error);
       throw error;
     }
-    return data;
+
+    if (data && data.length > 0) {
+      return data[0];
+    }
+
+    // Fallback: fetch record directly if RLS blocked returning select
+    const fetched = await applicationRepository.getApplicationById(applicationId);
+    return fetched;
   },
 
   /**

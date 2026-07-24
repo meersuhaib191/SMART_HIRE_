@@ -5,10 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { AuthCard, FormField } from "@/components/auth";
+import { FormField } from "@/components/auth";
 import { Button } from "@smarthire/ui";
-
-import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Briefcase } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { createBrowserClient } from "@supabase/ssr";
 
@@ -126,167 +125,189 @@ export default function EditJobPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
+        <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
       </div>
     );
   }
 
   return (
-    <AuthCard
-      title="Edit Job Posting"
-      subtitle="Modify job configurations and screening templates."
-    >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {errorMsg && (
-          <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs font-medium text-red-500">
-            {errorMsg}
+    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
+      {/* Top Header */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">
+            <Briefcase className="h-4 w-4" /> Recruiter Management
           </div>
-        )}
-
-        <FormField
-          label="Job Title"
-          id="title"
-          placeholder="Lead Software Engineer"
-          error={errors.title?.message}
-          disabled={saving}
-          {...register("title")}
-        />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
-          <div className="space-y-1.5 w-full">
-            <label htmlFor="departmentId" className="text-xs font-semibold text-zinc-550 dark:text-zinc-400 uppercase tracking-wider block">
-              Department
-            </label>
-            <select
-              id="departmentId"
-              disabled={saving}
-              className="w-full rounded-lg border border-zinc-250 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/80 px-3.5 py-2 text-sm text-zinc-400 focus:border-blue-500 focus:outline-none transition-colors"
-              {...register("departmentId")}
-            >
-              <option value="">No Department</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5 w-full">
-            <label htmlFor="type" className="text-xs font-semibold text-zinc-550 dark:text-zinc-400 uppercase tracking-wider block">
-              Employment Type
-            </label>
-            <select
-              id="type"
-              disabled={saving}
-              className="w-full rounded-lg border border-zinc-250 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/80 px-3.5 py-2 text-sm text-zinc-400 focus:border-blue-500 focus:outline-none transition-colors"
-              {...register("type")}
-            >
-              <option value="full-time">Full-Time</option>
-              <option value="part-time">Part-Time</option>
-              <option value="contract">Contract</option>
-              <option value="internship">Internship</option>
-            </select>
-          </div>
+          <h1 className="text-2xl font-black text-zinc-900 tracking-tight">
+            Edit Job Posting
+          </h1>
+          <p className="text-xs text-zinc-500 font-medium mt-1">
+            Modify job requirements, description, and hiring pipeline status.
+          </p>
         </div>
+        <Button
+          variant="outline"
+          onClick={() => router.push(`/recruiter/jobs/${jobId}`)}
+          className="text-xs font-semibold self-start sm:self-auto gap-1.5 border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-700"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to Details
+        </Button>
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
-          <div className="space-y-1.5 w-full">
-            <label htmlFor="experienceLevel" className="text-xs font-semibold text-zinc-550 dark:text-zinc-400 uppercase tracking-wider block">
-              Experience Level
-            </label>
-            <select
-              id="experienceLevel"
-              disabled={saving}
-              className="w-full rounded-lg border border-zinc-250 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/80 px-3.5 py-2 text-sm text-zinc-400 focus:border-blue-500 focus:outline-none transition-colors"
-              {...register("experienceLevel")}
-            >
-              <option value="entry">Entry Level</option>
-              <option value="mid">Mid Level</option>
-              <option value="senior">Senior Level</option>
-              <option value="lead">Lead Role</option>
-              <option value="executive">Executive Level</option>
-            </select>
+      {/* Main Container Card (Crisp White Light Theme) */}
+      <div className="bg-white border border-zinc-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          {errorMsg && (
+            <div className="rounded-xl bg-red-50 border border-red-200 p-3.5 text-xs font-semibold text-red-600">
+              {errorMsg}
+            </div>
+          )}
+
+          <FormField
+            label="Job Title"
+            id="title"
+            placeholder="Lead Software Engineer"
+            error={errors.title?.message}
+            disabled={saving}
+            {...register("title")}
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+            <div className="space-y-1.5 w-full">
+              <label htmlFor="departmentId" className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
+                Department
+              </label>
+              <select
+                id="departmentId"
+                disabled={saving}
+                className="w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none transition-colors font-medium"
+                {...register("departmentId")}
+              >
+                <option value="">No Department</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5 w-full">
+              <label htmlFor="type" className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
+                Employment Type
+              </label>
+              <select
+                id="type"
+                disabled={saving}
+                className="w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none transition-colors font-medium"
+                {...register("type")}
+              >
+                <option value="full-time">Full-Time</option>
+                <option value="part-time">Part-Time</option>
+                <option value="contract">Contract</option>
+                <option value="internship">Internship</option>
+              </select>
+            </div>
           </div>
 
-          <div className="space-y-1.5 w-full">
-            <label htmlFor="status" className="text-xs font-semibold text-zinc-555 dark:text-zinc-400 uppercase tracking-wider block">
-              Posting Status
-            </label>
-            <select
-              id="status"
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+            <div className="space-y-1.5 w-full">
+              <label htmlFor="experienceLevel" className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
+                Experience Level
+              </label>
+              <select
+                id="experienceLevel"
+                disabled={saving}
+                className="w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none transition-colors font-medium"
+                {...register("experienceLevel")}
+              >
+                <option value="entry">Entry Level</option>
+                <option value="mid">Mid Level</option>
+                <option value="senior">Senior Level</option>
+                <option value="lead">Lead Role</option>
+                <option value="executive">Executive Level</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5 w-full">
+              <label htmlFor="status" className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
+                Posting Status
+              </label>
+              <select
+                id="status"
+                disabled={saving}
+                className="w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none transition-colors font-medium"
+                {...register("status")}
+              >
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="closed">Closed / Archived</option>
+              </select>
+            </div>
+
+            <FormField
+              label="Location"
+              id="location"
+              placeholder="San Francisco, CA or Remote"
+              error={errors.location?.message}
               disabled={saving}
-              className="w-full rounded-lg border border-zinc-250 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/80 px-3.5 py-2 text-sm text-zinc-400 focus:border-blue-500 focus:outline-none transition-colors"
-              {...register("status")}
-            >
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
-              <option value="closed">Closed / Archived</option>
-            </select>
+              {...register("location")}
+            />
           </div>
 
           <FormField
-            label="Location"
-            id="location"
-            placeholder="San Francisco, CA or Remote"
-            error={errors.location?.message}
+            label="Job Category"
+            id="category"
+            placeholder="Product Engineering"
+            error={errors.category?.message}
             disabled={saving}
-            {...register("location")}
+            {...register("category")}
           />
-        </div>
 
-        <FormField
-          label="Job Category"
-          id="category"
-          placeholder="Product Engineering"
-          error={errors.category?.message}
-          disabled={saving}
-          {...register("category")}
-        />
-
-        <div className="space-y-1.5 text-left">
-          <label htmlFor="description" className="text-xs font-semibold text-zinc-550 dark:text-zinc-400 uppercase tracking-wider block">
-            Job Description & Content
-          </label>
-          <textarea
-            id="description"
-            rows={5}
-            placeholder="Role description content..."
-            className="w-full rounded-lg border border-zinc-250 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/80 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none transition-colors"
-            {...register("description")}
-          />
-          {errors.description?.message && (
-            <p className="text-xs text-red-500">{errors.description.message}</p>
-          )}
-        </div>
-
-        {/* Navigation Control Buttons */}
-        <div className="flex justify-between items-center pt-4 border-t border-zinc-200/20">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push(`/recruiter/jobs/${jobId}`)}
-            disabled={saving}
-            className="flex items-center gap-1 border-zinc-800 text-zinc-350 hover:bg-zinc-900"
-          >
-            <ArrowLeft className="h-4 w-4" /> Cancel
-          </Button>
-
-          <Button
-            type="submit"
-            disabled={saving}
-            className="bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 h-10 px-6"
-          >
-            {saving ? (
-              <Loader2 className="h-4.5 w-4.5 animate-spin text-white" />
-            ) : (
-              <>
-                Save Changes <Save className="h-4.5 w-4.5" />
-              </>
+          <div className="space-y-1.5 text-left">
+            <label htmlFor="description" className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
+              Job Description & Content
+            </label>
+            <textarea
+              id="description"
+              rows={5}
+              placeholder="Role description content..."
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-blue-600 focus:outline-none transition-colors font-medium"
+              {...register("description")}
+            />
+            {errors.description?.message && (
+              <p className="text-xs font-semibold text-red-600">{errors.description.message}</p>
             )}
-          </Button>
-        </div>
-      </form>
-    </AuthCard>
+          </div>
+
+          {/* Navigation Control Buttons */}
+          <div className="flex justify-between items-center pt-5 border-t border-zinc-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push(`/recruiter/jobs/${jobId}`)}
+              disabled={saving}
+              className="flex items-center gap-1.5 rounded-xl text-xs font-semibold border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-700"
+            >
+              <ArrowLeft className="h-4 w-4" /> Cancel
+            </Button>
+
+            <Button
+              type="submit"
+              disabled={saving}
+              className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 h-10 px-6 rounded-xl text-xs font-semibold transition-colors duration-150"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin text-white" />
+              ) : (
+                <>
+                  Save Changes <Save className="h-4 w-4" />
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

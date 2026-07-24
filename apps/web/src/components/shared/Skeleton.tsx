@@ -31,12 +31,17 @@ export function SkeletonMetric() {
 }
 
 /* ── Table Row Skeleton ─────────────────────────────────────── */
+const DETERMINISTIC_WIDTHS = ["75%", "85%", "65%", "80%", "70%"];
+
 export function SkeletonTableRow({ cols = 5 }: { cols?: number }) {
   return (
     <tr>
       {Array.from({ length: cols }).map((_, i) => (
         <td key={i} className="px-6 py-4">
-          <Skeleton className="h-4 rounded-md" style={{ width: `${60 + Math.random() * 30}%` }} />
+          <Skeleton
+            className="h-4 rounded-md"
+            style={{ width: DETERMINISTIC_WIDTHS[i % DETERMINISTIC_WIDTHS.length] }}
+          />
         </td>
       ))}
     </tr>

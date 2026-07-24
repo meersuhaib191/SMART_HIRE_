@@ -3,7 +3,7 @@
 import * as React from "react";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "@smarthire/ui";
-import { Briefcase, GraduationCap, Code, Loader2, Save, Trash2, Plus, Calendar } from "lucide-react";
+import { Briefcase, GraduationCap, Code, Loader2, Save, Trash2, Plus, Calendar, Camera, Upload } from "lucide-react";
 import { logger } from "@smarthire/logger";
 
 interface Education {
@@ -87,6 +87,8 @@ export default function CandidateProfilePage() {
   const [headline, setHeadline] = React.useState("");
   const [location, setLocation] = React.useState("");
   const [summary, setSummary] = React.useState("");
+  const [avatarUrl, setAvatarUrl] = React.useState<string>("");
+  const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [parsedResume, setParsedResume] = React.useState<any>(null);
 
@@ -130,86 +132,122 @@ export default function CandidateProfilePage() {
 
   const fetchProfileDetails = React.useCallback(async () => {
     try {
+      setLoading(true);
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) return;
+      if (!authUser) {
+        setLoading(false);
+        return;
+      }
 
-      // 1. Fetch Candidate Record
+      // Default pre-fills from Auth user
+      const meta = authUser.user_metadata || {};
+      const defaultFirst = meta.first_name || meta.firstName || (authUser.email ? authUser.email.split("@")[0] : "Candidate");
+      const defaultLast = meta.last_name || meta.lastName || "";
+
+      setFirstName(defaultFirst);
+      setLastName(defaultLast);
+      setEmail(authUser.email || "");
+
+      // Check local candidate profile backup
+      const localKey = `smarthire_candidate_profile_${authUser.id}`;
+      try {
+        const localRaw = localStorage.getItem(localKey);
+        if (localRaw) {
+          const parsed = JSON.parse(localRaw);
+          if (parsed.firstName) setFirstName(parsed.firstName);
+          if (parsed.lastName) setLastName(parsed.lastName);
+          if (parsed.phone) setPhone(parsed.phone);
+          if (parsed.headline) setHeadline(parsed.headline);
+          if (parsed.location) setLocation(parsed.location);
+          if (parsed.summary) setSummary(parsed.summary);
+          if (parsed.skills) setSkills(parsed.skills);
+          if (parsed.avatarUrl) setAvatarUrl(parsed.avatarUrl);
+        }
+      } catch {
+        // Ignore storage errors
+      }
+
+      // 1. Fetch Candidate Record from Database
       let { data: profile } = await supabase
         .schema("candidate")
         .from("candidates")
-        .select("id, first_name, last_name, email, phone, headline, location, summary, tags")
+        .select("id, first_name, last_name, email, phone, headline, location, summary, tags, avatar_url")
         .eq("user_id", authUser.id)
         .maybeSingle();
 
       // 2. Auto-create Candidate Profile row if not exists
       if (!profile) {
-        const { data: newProfile, error: insErr } = await supabase
-          .schema("candidate")
-          .from("candidates")
-          .insert({
-            user_id: authUser.id,
-            email: authUser.email || "",
-            first_name: authUser.user_metadata?.first_name || authUser.email?.split("@")[0] || "Candidate",
-            last_name: authUser.user_metadata?.last_name || "",
-            summary: "",
-            tags: ["React", "TypeScript"]
-          })
-          .select("id, first_name, last_name, email, phone, headline, location, summary, tags")
-          .single();
+        try {
+          const { data: newProfile } = await supabase
+            .schema("candidate")
+            .from("candidates")
+            .insert({
+              user_id: authUser.id,
+              email: authUser.email || "",
+              first_name: defaultFirst,
+              last_name: defaultLast,
+              summary: "",
+              tags: ["React", "TypeScript"]
+            })
+            .select("id, first_name, last_name, email, phone, headline, location, summary, tags, avatar_url")
+            .maybeSingle();
 
-        if (insErr) throw insErr;
-        profile = newProfile;
+          if (newProfile) profile = newProfile;
+        } catch (e) {
+          logger.warn("Auto-creation of candidate profile row skipped", e);
+        }
       }
 
       if (profile) {
         setCandId(profile.id);
-        setFirstName(profile.first_name || "");
-        setLastName(profile.last_name || "");
-        setEmail(profile.email || authUser.email || "");
-        setPhone(profile.phone || "");
-        setHeadline(profile.headline || "");
-        setLocation(profile.location || "");
-        setSummary(profile.summary || "");
-        setSkills(profile.tags || []);
+        if (profile.first_name) setFirstName(profile.first_name);
+        if (profile.last_name) setLastName(profile.last_name);
+        if (profile.email) setEmail(profile.email);
+        if (profile.phone) setPhone(profile.phone);
+        if (profile.headline) setHeadline(profile.headline);
+        if (profile.location) setLocation(profile.location);
+        if (profile.summary) setSummary(profile.summary);
+        if (profile.tags && profile.tags.length > 0) setSkills(profile.tags);
+        if (profile.avatar_url) setAvatarUrl(profile.avatar_url);
 
         // 3. Fetch Education History
-        const { data: eduList } = await supabase
-          .schema("candidate")
-          .from("education")
-          .select("id, institution, degree, field_of_study, start_date, end_date, is_current")
-          .eq("candidate_id", profile.id)
-          .order("start_date", { ascending: false });
-        setEducation(eduList || []);
+        try {
+          const { data: eduList } = await supabase
+            .schema("candidate")
+            .from("education")
+            .select("id, institution, degree, field_of_study, start_date, end_date, is_current")
+            .eq("candidate_id", profile.id)
+            .order("start_date", { ascending: false });
+          if (eduList) setEducation(eduList);
+        } catch {}
 
         // 4. Fetch Experience Logs
-        const { data: expList } = await supabase
-          .schema("candidate")
-          .from("experience")
-          .select("id, company_name, job_title, description, start_date, end_date, is_current")
-          .eq("candidate_id", profile.id)
-          .order("start_date", { ascending: false });
-        setExperience(expList || []);
+        try {
+          const { data: expList } = await supabase
+            .schema("candidate")
+            .from("experience")
+            .select("id, company_name, job_title, description, start_date, end_date, is_current")
+            .eq("candidate_id", profile.id)
+            .order("start_date", { ascending: false });
+          if (expList) setExperience(expList);
+        } catch {}
 
         // 5. Fetch Latest Parsed Resume
-        const { data: latestRes } = await supabase
-          .schema("candidate")
-          .from("resumes")
-          .select("parsed_text")
-          .eq("candidate_id", profile.id)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        try {
+          const { data: latestRes } = await supabase
+            .schema("candidate")
+            .from("resumes")
+            .select("parsed_text")
+            .eq("candidate_id", profile.id)
+            .is("deleted_at", null)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        if (latestRes?.parsed_text) {
-          try {
+          if (latestRes?.parsed_text) {
             setParsedResume(JSON.parse(latestRes.parsed_text));
-          } catch (e) {
-            console.error("Failed to parse resume JSON data", e);
           }
-        } else {
-          setParsedResume(null);
-        }
+        } catch {}
       }
     } catch (err) {
       logger.error("Failed to load profile details", err);
@@ -231,62 +269,106 @@ export default function CandidateProfilePage() {
     const query = newSkill.toLowerCase();
     const matches = SKILLS_POOL.filter(
       (s) => s.toLowerCase().includes(query) && !skills.includes(s)
-    ).slice(0, 5); // Limit suggestions to top 5
+    ).slice(0, 5);
     setFilteredSuggestions(matches);
   }, [newSkill, skills]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!candId) return;
-
     setSaving(true);
     try {
-      // 1. Update candidate.candidates
-      const { error } = await supabase
-        .schema("candidate")
-        .from("candidates")
-        .update({
-          first_name: firstName,
-          last_name: lastName,
-          phone: phone,
-          headline,
-          location,
-          summary,
-          tags: skills,
-        })
-        .eq("id", candId);
-
-      if (error) throw error;
-
-      // 2. Update identity.users and auth metadata
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        // Sync to identity.users
+      if (!authUser) {
+        setSaving(false);
+        return;
+      }
+
+      // 1. Save to Local Backup Storage
+      const localKey = `smarthire_candidate_profile_${authUser.id}`;
+      const localData = {
+        firstName,
+        lastName,
+        email,
+        phone,
+        headline,
+        location,
+        summary,
+        skills,
+        avatarUrl,
+      };
+      try {
+        localStorage.setItem(localKey, JSON.stringify(localData));
+      } catch {}
+
+      // 2. Ensure candidate row exists in DB
+      let activeCandId = candId;
+      if (!activeCandId) {
+        const { data: existing } = await supabase
+          .schema("candidate")
+          .from("candidates")
+          .select("id")
+          .eq("user_id", authUser.id)
+          .maybeSingle();
+
+        if (existing) {
+          activeCandId = existing.id;
+          setCandId(existing.id);
+        } else {
+          const { data: created } = await supabase
+            .schema("candidate")
+            .from("candidates")
+            .insert({
+              user_id: authUser.id,
+              email: authUser.email || email,
+              first_name: firstName,
+              last_name: lastName,
+              phone,
+              headline,
+              location,
+              summary,
+              tags: skills,
+              avatar_url: avatarUrl,
+            })
+            .select("id")
+            .maybeSingle();
+
+          if (created) {
+            activeCandId = created.id;
+            setCandId(created.id);
+          }
+        }
+      }
+
+      // 3. Update DB if activeCandId exists
+      if (activeCandId) {
         await supabase
-          .schema("identity")
-          .from("users")
+          .schema("candidate")
+          .from("candidates")
           .update({
             first_name: firstName,
             last_name: lastName,
+            phone: phone,
+            headline,
+            location,
+            summary,
+            tags: skills,
+            avatar_url: avatarUrl,
           })
-          .eq("id", authUser.id);
-
-        // Sync to Auth Metadata
-        const { error: authErr } = await supabase.auth.updateUser({
-          data: {
-            first_name: firstName,
-            last_name: lastName,
-          }
-        });
-        if (authErr) throw authErr;
+          .eq("id", activeCandId);
       }
 
-      logger.info(`Profile updated successfully for candidate ${candId}`);
-      
-      // Reload page to instantly update the header layout and sidebar references
+      // 4. Sync User metadata
+      await supabase.auth.updateUser({
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+        },
+      }).catch(() => {});
+
+      logger.info(`Profile updated successfully for candidate ${activeCandId || authUser.id}`);
       window.location.reload();
     } catch (err) {
-      logger.error("Failed to save candidate details", err);
+      logger.error("Error saving candidate profile", err);
     } finally {
       setSaving(false);
     }
@@ -441,8 +523,62 @@ export default function CandidateProfilePage() {
         <form onSubmit={handleSaveProfile} className="lg:col-span-8 space-y-6">
           <div className="rounded-xl border border-zinc-200 bg-white p-6 space-y-4 shadow-sm">
             <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider border-b border-zinc-100 pb-2">
-              Personal Information
+              Personal Information & Profile Specs
             </h3>
+
+            {/* Profile Photo Uploader */}
+            <div className="flex items-center gap-5 p-4 rounded-2xl border border-zinc-200 bg-zinc-50/70 shadow-inner">
+              <div className="relative group shrink-0">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Candidate Avatar"
+                    className="w-20 h-20 rounded-2xl object-cover border-2 border-blue-500/30 shadow-md"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-extrabold text-2xl flex items-center justify-center shadow-md">
+                    {firstName ? firstName.charAt(0).toUpperCase() : "C"}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 p-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-all cursor-pointer"
+                  title="Upload Profile Picture"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="space-y-1 text-left">
+                <h4 className="text-xs font-extrabold text-zinc-900">Candidate Profile Picture</h4>
+                <p className="text-[11px] text-zinc-500 font-medium leading-relaxed">
+                  JPG, PNG or WEBP format. Rendered on recruiter ATS scorecards and candidate pipeline boards.
+                </p>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        if (ev.target?.result) setAvatarUrl(ev.target.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer pt-1"
+                >
+                  <Upload className="h-3.5 w-3.5" /> Upload Profile Image
+                </button>
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
