@@ -67,7 +67,12 @@ The conditional check on \texttt{typeof window} ensures that server-side renderi
 
 Passwords are hashed by Supabase using bcrypt with a configurable cost factor. JWT tokens are stored in HTTP-only cookies to prevent cross-site scripting (XSS) attacks from accessing them. API routes validate the JWT on every request using Supabase's \texttt{getUser()} method, which verifies the token signature and checks expiration.
 
-\screenshotplaceholder{Login and registration interface}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/login and registration interface.png}
+  \caption{Login and registration interface}
+  \label{fig:login_register}
+\end{figure}
 
 \section{Module 2: Job Management}
 \label{sec:impl-jobs}
@@ -114,9 +119,19 @@ Candidates need a profile that stores their personal information, skills, educat
 
 The candidate profile is pre-populated from Supabase Auth metadata (name, email) upon first login, reducing manual data entry. Additional fields (phone, skills array, experience years) are stored in the \texttt{candidate.candidates} table. The job directory page fetches all published jobs using a filtered query and presents them in a searchable, paginated grid. Candidates can filter by keyword, location, job category, and employment type.
 
-\screenshotplaceholder{Candidate job directory with search filters}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/candidate job dirwithsearchfilters.png}
+  \caption{Candidate job directory with search filters}
+  \label{fig:candidate_job_directory}
+\end{figure}
 
-\screenshotplaceholder{Candidate profile editor}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/candidate profile editor.png}
+  \caption{Candidate profile editor interface}
+  \label{fig:candidate_profile_editor}
+\end{figure}
 
 \section{Module 4: Resume Upload and ATS Scoring}
 \label{sec:impl-ats}
@@ -159,9 +174,9 @@ Respond in JSON format:
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.65\textwidth]{images/ats_scorecard.png}
-  \caption{ATS screening card breakdown with candidate evaluation score and technical skills match.}
-  \label{fig:ats_scorecard}
+  \includegraphics[width=0.65\textwidth]{images/ats view.png}
+  \caption{ATS Board}
+  \label{fig:ats_board}
 \end{figure}
 
 \section{Module 5: MCQ Assessment Engine}
@@ -177,7 +192,12 @@ Each job can have an associated question pool stored in the \texttt{assessment.q
 
 Score computation is straightforward: the number of correct answers divided by the total number of questions, multiplied by 100. The computed score is stored in the application record.
 
-\screenshotplaceholder{MCQ examination interface with countdown timer}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/mcq.png}
+  \caption{MCQ examination interface with countdown timer}
+  \label{fig:mcq_exam}
+\end{figure}
 
 \section{Module 6: Interactive Coding Assessment}
 \label{sec:impl-coding}
@@ -192,7 +212,12 @@ The code editor is built using \texttt{@monaco-editor/react}, which embeds the s
 
 Each test case specifies an input string and an expected output string. The execution environment runs the candidate's code with the input piped to stdin, captures stdout, and performs a string comparison. Test results are returned to the frontend, showing pass/fail status for each test case. The final score is the percentage of test cases passed.
 
-\screenshotplaceholder{Monaco coding IDE with test results panel}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/coding round.png}
+  \caption{Monaco coding IDE with test results panel}
+  \label{fig:coding_ide}
+\end{figure}
 
 \section{Module 7: AI Video Interview}
 \label{sec:impl-interview}
@@ -299,7 +324,12 @@ When the candidate receives an offer, they see it on their application history p
 
 The platform provides distinct navigation experiences for desktop and mobile viewports. On desktop, a persistent sidebar provides access to all portal sections. On mobile (viewport width below 768 pixels), the sidebar collapses into a hamburger menu that opens a slide-out drawer. Navigation state is managed using React's \texttt{useState} hook, and transitions are animated using CSS transforms for smooth visual feedback.
 
-\screenshotplaceholder{Mobile responsive navigation drawer}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.50\textwidth]{images/mobile navigation drawer.png}
+  \caption{Mobile responsive navigation drawer}
+  \label{fig:mobile_drawer}
+\end{figure}
 
 \section{Error Handling and Resilience Patterns}
 \label{sec:impl-errors}

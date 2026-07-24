@@ -64,19 +64,26 @@
 \newpage
 }
 
-% ===== SCREENSHOT PLACEHOLDER (HALF PAGE BORDERED BOX) =====
 \newcommand{\screenshotplaceholder}[1]{%
   \begin{figure}[htbp]
-  \centering
-  \fbox{\begin{minipage}[c][3.6in][c]{0.92\textwidth}
     \centering
-    \vfill
-    {\Large \bfseries SCREENSHOT PLACEHOLDER}\\[0.2in]
-    {\large \itshape (Insert actual screenshot here)}\\[0.3in]
-    {\textbf{#1}}
-    \vfill
-  \end{minipage}}
-  \caption{#1}
+    \IfFileExists{images/#1.png}{%
+      \includegraphics[width=0.92\textwidth]{images/#1.png}%
+    }{%
+      \IfFileExists{images/#1.jpg}{%
+        \includegraphics[width=0.92\textwidth]{images/#1.jpg}%
+      }{%
+        \fbox{\begin{minipage}[c][3.6in][c]{0.92\textwidth}
+          \centering
+          \vfill
+          {\Large \bfseries SCREENSHOT PLACEHOLDER}\\[0.2in]
+          {\large \itshape (Insert actual screenshot here)}\\[0.3in]
+          {\textbf{#1}}
+          \vfill
+        \end{minipage}}%
+      }%
+    }%
+    \caption{#1}
   \end{figure}
 }
 
