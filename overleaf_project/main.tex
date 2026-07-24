@@ -130,9 +130,12 @@
 % ===================================================================
 \begin{document}
 
-% --- Frontmatter (Replaced with Official first1.pdf) ---
+% --- Frontmatter (Official first1.pdf + Abstract) ---
 \thispagestyle{empty}
 \includepdf[pages={-},pagecommand={\thispagestyle{empty}}]{first1.pdf}
+
+\cleardoublepage
+\input{frontmatter/abstract.tex}
 
 \cleardoublepage
 \pagenumbering{roman}
