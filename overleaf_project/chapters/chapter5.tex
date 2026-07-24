@@ -96,7 +96,12 @@ async function getJobsByRecruiter(recruiterId: string) {
 }
 \end{lstlisting}
 
-\screenshotplaceholder{Job creation wizard interface}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/job_creation.png}
+  \caption{Job creation wizard interface showcasing light mode theme and multi-step positioning parameters.}
+  \label{fig:job_creation}
+\end{figure}
 
 \section{Module 3: Candidate Profile and Job Directory}
 \label{sec:impl-candidate}
@@ -152,7 +157,12 @@ Respond in JSON format:
   "overall_fit": <number> }
 \end{lstlisting}
 
-\screenshotplaceholder{ATS score breakdown view}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.65\textwidth]{images/ats_scorecard.png}
+  \caption{ATS screening card breakdown with candidate evaluation score and technical skills match.}
+  \label{fig:ats_scorecard}
+\end{figure}
 
 \section{Module 5: MCQ Assessment Engine}
 \label{sec:impl-mcq}
@@ -219,7 +229,12 @@ The overall recommendation uses a five-point scale:
 \end{tabular}
 \end{table}
 
-\screenshotplaceholder{AI video interview recording interface}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/ai_interview.png}
+  \caption{Live AI video interview recording room with real-time audio transcript, proctoring gaze detection, and voice evaluation.}
+  \label{fig:ai_interview}
+\end{figure}
 
 \section{Module 8: Recruiter Kanban Pipeline}
 \label{sec:impl-kanban}
@@ -234,7 +249,12 @@ The Kanban board is implemented as a client-side React component that fetches al
 
 Stage transitions are validated on the server to ensure they follow the prescribed order. If a recruiter moves a candidate to a rejected state, the system records which stage the rejection occurred at and optionally logs a rejection reason. This information is surfaced on the candidate's application history page.
 
-\screenshotplaceholder{Recruiter Kanban pipeline board}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/pipeline_board.png}
+  \caption{Recruiter Kanban pipeline board showing multi-stage candidate progression and automated ATS screening controls.}
+  \label{fig:pipeline_board}
+\end{figure}
 
 \section{Module 9: Recruiter Dashboard}
 \label{sec:impl-dashboard}
@@ -247,7 +267,12 @@ The dashboard provides recruiters with at-a-glance metrics on their hiring activ
 
 A critical design requirement is that each recruiter sees only metrics related to their own job postings. The dashboard queries are scoped by joining the \texttt{application.applications} table against the \texttt{job.jobs} table where the \texttt{recruiter\_id} matches the authenticated user. This prevents data from other recruiters (even within the same company) from leaking into the dashboard view.
 
-\screenshotplaceholder{Recruiter dashboard with hiring metrics}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/recruiter_dashboard.png}
+  \caption{Recruiter dashboard displaying real-time hiring funnel metrics, active applicant counts, and application growth analytics.}
+  \label{fig:recruiter_dashboard}
+\end{figure}
 
 \section{Module 10: Offer Letter Generation}
 \label{sec:impl-offer}
@@ -262,7 +287,12 @@ Offer letters are generated client-side using the jsPDF library combined with ht
 
 When the candidate receives an offer, they see it on their application history page and can accept or decline it. The acceptance status is recorded in the database and reflected on the recruiter's Kanban board.
 
-\screenshotplaceholder{Offer letter customisation and preview}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{images/offer_letter.png}
+  \caption{Official offer letter generator interface with real-time PDF preview and signature workflow.}
+  \label{fig:offer_letter}
+\end{figure}
 
 \section{Module 11: Responsive Navigation}
 \label{sec:impl-nav}
@@ -349,5 +379,5 @@ The administrator dashboard aggregates metrics across all tenants: total registe
 
 Analytics queries use PostgreSQL aggregate functions (\texttt{COUNT}, \texttt{GROUP BY}) with appropriate join conditions to compute metrics efficiently. Queries are executed on demand when the dashboard page loads rather than pre-computed, which simplifies the architecture at the cost of slightly higher query latency. For the current scale of the platform (hundreds of users, thousands of applications), on-demand computation is well within acceptable performance bounds.
 
-\screenshotplaceholder{Platform analytics dashboard}
+
 

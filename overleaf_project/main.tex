@@ -1,7 +1,7 @@
 \documentclass[12pt,a4paper,oneside]{report}
 
 % ===== GEOMETRY & TYPOGRAPHY =====
-\usepackage[top=1in, bottom=1.0in, right=1in, left=1.25in]{geometry}
+\usepackage[top=1in, bottom=1.1in, right=1in, left=1.25in]{geometry}
 \usepackage{mathptmx}
 \usepackage{setspace}
 \onehalfspacing
@@ -26,39 +26,53 @@
 \usepackage{appendix}
 \usepackage{pdfpages}
 
-% ===== SPACING & LAYOUT CONTROLS (Tuned for ~65 Pages Target) =====
+% ===== SPACING & LAYOUT CONTROLS =====
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{0.5em}
-\setlength{\textfloatsep}{12pt plus 2pt minus 2pt}
-\setlength{\intextsep}{12pt plus 2pt minus 2pt}
+\setlength{\parskip}{0.6em}
 \raggedbottom
 \widowpenalty=10000
 \clubpenalty=10000
 
 % ===== ELEGANT CENTERED CHAPTER TITLE PAGE COMMAND =====
+% Formats as:
+% CHAPTER X (Styled uppercase)
+% ----------- (Decorative Accent Rule)
+% TITLE (Bold, Centered, Spacious)
+% ----------- (Decorative Accent Rule)
 \newcommand{\makechaptertitlepage}[2]{%
-  \cleardoublepage
-  \thispagestyle{empty}
-  \vspace*{\fill}
-  \begin{center}
-    {\Large \scshape \bfseries \color{blue!85!black} CHAPTER #1}\\[0.2in]
-    {\color{gray!40}\rule{3.8in}{1.2pt}}\\[0.3in]
-    {\Huge \bfseries \color{black} #2}\\[0.3in]
-    {\color{gray!40}\rule{3.8in}{1.2pt}}
-  \end{center}
-  \vspace*{\fill}
-  \newpage
+\cleardoublepage
+\thispagestyle{empty}
+
+\vspace*{\fill}
+
+\begin{center}
+    {\Large\scshape\bfseries\color{blue!85!black} CHAPTER #1}\\[0.25in]
+
+    {\color{gray!40}\rule{4.0in}{1.2pt}}\\[0.25in]
+
+    {\Huge\bfseries\color{black}
+    \parbox{0.82\textwidth}{%
+        \centering
+        \setstretch{1.1}%
+        #2
+    }}\\[0.25in]
+
+    {\color{gray!40}\rule{4.0in}{1.2pt}}
+\end{center}
+
+\vspace*{\fill}
+\newpage
 }
 
-% ===== SCREENSHOT PLACEHOLDER (OPTIMIZED HALF PAGE CONTAINER) =====
+% ===== SCREENSHOT PLACEHOLDER (HALF PAGE BORDERED BOX) =====
 \newcommand{\screenshotplaceholder}[1]{%
   \begin{figure}[htbp]
   \centering
-  \fbox{\begin{minipage}[c][3.0in][c]{0.92\textwidth}
+  \fbox{\begin{minipage}[c][3.6in][c]{0.92\textwidth}
     \centering
     \vfill
-    {\Large \bfseries SCREENSHOT PLACEHOLDER}\\[0.15in]
-    {\large \itshape (Insert actual screenshot here)}\\[0.2in]
+    {\Large \bfseries SCREENSHOT PLACEHOLDER}\\[0.2in]
+    {\large \itshape (Insert actual screenshot here)}\\[0.3in]
     {\textbf{#1}}
     \vfill
   \end{minipage}}
@@ -69,7 +83,7 @@
 % ===== CHAPTER FORMAT (suppress "Chapter X" on text pages) =====
 \titleformat{\chapter}[display]
   {\normalfont\Huge\bfseries\centering}{}{0pt}{}
-\titlespacing*{\chapter}{0pt}{-20pt}{18pt}
+\titlespacing*{\chapter}{0pt}{-20pt}{20pt}
 
 \titleformat{\section}{\normalfont\Large\bfseries}{\thesection}{1em}{}
 \titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{1em}{}

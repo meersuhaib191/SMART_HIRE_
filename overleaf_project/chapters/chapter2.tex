@@ -2,56 +2,113 @@
 \chapter{Literature Survey}
 \label{ch:litsurvey}
 
-\section{Overview}
+\section{Introduction to the Survey}
 \label{sec:lit-intro}
 
-This chapter surveys academic literature and enterprise platforms across four domain areas: applicant tracking pipelines, resume parsing systems, technical assessment platforms, and AI video interview evaluators.
+This chapter examines existing research and commercial systems related to the four principal domains that SmartHire addresses: applicant tracking and pipeline management, automated resume analysis, online technical assessment, and AI-assisted video interviewing. For each domain, we review representative academic publications and commercial products, identify their capabilities and limitations, and explain how SmartHire's design decisions respond to the gaps we observed.
 
-\section{Review of Commercial Systems}
+\section{Applicant Tracking Systems}
 \label{sec:ats-review}
 
-Commercial ATS platforms such as Greenhouse~\cite{greenhouse2024}, Lever~\cite{lever2024}, and Workday~\cite{workday2024} provide structured hiring pipelines and collaborative scoring. However, these systems operate purely as workflow tools and do not natively evaluate technical candidate skills. External coding platforms (HackerRank, Codility) and video tools (HireVue) require custom API integrations, introducing data synchronization overhead and increasing recruiter workload by 20--30\%~\cite{nguyen2021}.
+\subsection{Commercial ATS Platforms}
 
-\section{Resume Parsing and Vector Similarity Scoring}
+Modern applicant tracking systems such as Greenhouse~\cite{greenhouse2024}, Lever~\cite{lever2024}, and Workday Recruiting~\cite{workday2024} provide structured hiring pipelines, collaborative evaluation tools, and basic analytics dashboards. Greenhouse, for instance, allows recruiters to define custom interview stages, attach evaluation rubrics to each stage, and generate reports on pipeline velocity. Lever emphasises collaborative hiring, enabling multiple team members to leave notes and scores on candidate profiles.
+
+However, these platforms share a common limitation: they function primarily as data management and workflow coordination tools. They do not natively assess candidates. Technical evaluations---coding challenges, MCQ tests, and structured interviews---must be conducted through third-party integrations, requiring recruiters to switch between platforms and manually reconcile data. Nguyen and Chowdhury~\cite{nguyen2021} observed that this fragmentation increases recruiter workload by an estimated twenty to thirty percent compared to a unified system.
+
+\subsection{Open-Source ATS Alternatives}
+
+Several open-source ATS projects have emerged, including OpenCATS and FreeATS. These tools provide basic applicant tracking at no licence cost but typically lack the polish, integration ecosystem, and scalability of commercial offerings. More critically, none of them incorporate assessment or interview capabilities, meaning that the fragmentation problem remains~\cite{malinowski2006}.
+
+\section{Resume Parsing and Automated Scoring}
 \label{sec:resume-review}
 
-Early resume parsers relied on regular expressions and rule-based templates, which struggled with non-standard formatting~\cite{yu2005}. Machine learning models introduced named entity recognition (NER) for skill extraction~\cite{jiechieu2021}. Modern systems vectorise resumes and job descriptions into high-dimensional embedding spaces, computing match relevance via cosine similarity:
+\subsection{Rule-Based Parsing}
+
+Early resume parsing systems relied on regular expressions and predefined templates to extract structured fields (name, email, education, experience) from document text. Tools such as Sovren and Daxtra achieved reasonable accuracy on standard resume formats but struggled with non-standard layouts, multi-column designs, and PDF files with embedded images~\cite{yu2005}. Rule-based approaches also required extensive manual tuning whenever resume conventions shifted.
+
+\subsection{Machine Learning Approaches}
+
+More recent work has applied machine learning to resume parsing. Jiechieu and Tsopze~\cite{jiechieu2021} used a combination of named entity recognition (NER) and supervised classification to extract candidate attributes from unstructured resume text, achieving an F1 score of 0.87 on their evaluation dataset. Roy et al.~\cite{roy2020} applied deep learning models to rank resumes against job descriptions, framing the problem as a relevance ranking task similar to document retrieval in information retrieval systems.
+
+\subsection{Semantic Similarity Scoring}
+
+The most sophisticated resume scoring systems model both the resume and the job description as vectors in a shared embedding space and compute similarity using cosine distance or related metrics. Formally, given a resume vector $\vec{r}$ and a job description vector $\vec{j}$ in $\mathbb{R}^d$, the similarity is:
 \begin{equation}
 \label{eq:cosine}
 \text{sim}(\vec{r}, \vec{j}) = \frac{\vec{r} \cdot \vec{j}}{\|\vec{r}\| \cdot \|\vec{j}\|}
 \end{equation}
-SmartHire builds on this by leveraging Google's Gemini API to calculate multi-dimensional relevance scores (0--10 scale).
+SmartHire adapts this approach by using the Gemini API to generate contextual embeddings and produce a composite relevance score on a normalised zero-to-ten scale.
 
-\section{Technical Assessments and AI Interviewing}
+\section{Online Technical Assessment Platforms}
 \label{sec:assessment-review}
 
-Coding assessment platforms like HackerRank~\cite{hackerrank2024} and Codility~\cite{codility2024} provide sandboxed code execution but operate in isolation from ATS candidate boards. In video interviewing, HireVue pioneered AI-assisted candidate evaluation~\cite{hirevue2024}. Academic studies demonstrate that multimodal LLMs effectively evaluate candidate response depth and technical clarity as decision-support tools~\cite{chen2022, naim2018}.
+\subsection{Coding Assessment Platforms}
+
+HackerRank~\cite{hackerrank2024} and Codility~\cite{codility2024} are the two dominant platforms for online coding assessments. Both allow recruiters to assign coding challenges from curated libraries, execute candidate code against hidden test suites, and produce performance reports. HackerRank supports over thirty programming languages and provides features such as plagiarism detection and proctoring.
+
+Despite their technical sophistication, these platforms operate as standalone products. Candidate scores generated on HackerRank must be manually referenced against the recruiter's ATS, creating data synchronisation overhead. LeetCode~\cite{leetcode2024}, while popular among candidates for self-practice, does not offer recruiter-facing pipeline management at all.
+
+\subsection{MCQ and Knowledge Assessment}
+
+Google Forms and Microsoft Forms are commonly repurposed for MCQ-based technical screening, but they lack features critical for assessment integrity: timed sessions, randomised question ordering, and automatic score computation. Dedicated quiz platforms such as TestGorilla~\cite{testgorilla2024} address some of these gaps but, like coding platforms, function independently of the recruitment pipeline.
+
+\subsection{Browser-Based Code Execution}
+
+The Monaco Editor, which powers Visual Studio Code, has been widely adopted as an embeddable code editing component for web applications~\cite{monaco2024}. Several projects, including Judge0~\cite{judge0} and Piston, provide RESTful APIs for executing arbitrary code in sandboxed environments. SmartHire combines Monaco for the editing experience with server-side execution for test case validation.
+
+\section{AI-Assisted Video Interviewing}
+\label{sec:video-review}
+
+\subsection{Commercial Video Interview Platforms}
+
+HireVue~\cite{hirevue2024} pioneered the use of AI in video interviewing, analysing candidates' facial expressions, word choice, and vocal tone to generate ``employability'' scores. However, HireVue faced criticism for lack of transparency in its scoring algorithms and potential bias~\cite{harwell2019}. In 2021, HireVue discontinued its facial analysis feature in response to these concerns but continues to offer structured video interviewing with AI-assisted evaluation of verbal responses.
+
+Platforms such as Spark Hire and VidCruiter provide structured asynchronous video interviews but without AI-based evaluation; human reviewers must watch recordings and assign scores manually~\cite{sparkhire2024}.
+
+\subsection{Academic Research on AI Interviewing}
+
+Chen et al.~\cite{chen2022} proposed a multimodal framework that analyses speech content, prosody, and facial expressions during video interviews, demonstrating that automated scores correlated with human interviewer scores at $r = 0.72$. Naim et al.~\cite{naim2018} focused specifically on verbal content analysis, using NLP models to assess response relevance and communication clarity. Both studies noted that AI interview systems perform best as decision-support tools rather than autonomous decision-makers---a principle that SmartHire adopts by generating scorecards for recruiter review rather than automatically advancing or rejecting candidates.
+
+\subsection{Large Language Models in Interview Evaluation}
+
+The emergence of large language models such as GPT-4 and Gemini has opened new possibilities for interview evaluation. These models can assess the quality, relevance, and depth of candidate responses to open-ended questions with a level of nuance that earlier NLP approaches could not achieve~\cite{gemini2024}. SmartHire leverages Google's Gemini API to evaluate transcribed video interview responses, generating structured scorecards with ratings across multiple dimensions including technical knowledge, communication skill, and problem-solving approach.
 
 \section{Multi-Tenant Database Architectures}
 \label{sec:multitenancy-review}
 
-Multi-tenant SaaS platforms enforce data isolation through separate databases, shared database with separate schemas, or shared schemas with tenant IDs~\cite{chong2006}. SmartHire adopts domain-specific schemas (\texttt{organization}, \texttt{job}, \texttt{candidate}, \texttt{application}, \texttt{assessment}, \texttt{interview}) with PostgreSQL Row-Level Security (RLS) for complete multi-tenant isolation~\cite{supabase2024}.
+Multi-tenancy is a fundamental requirement for SaaS recruitment platforms, as each recruiting organisation's data must be isolated from every other's. Three primary strategies exist~\cite{chong2006}:
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+  \item \textbf{Separate databases}: Each tenant receives a dedicated database instance. This provides the strongest isolation but is operationally expensive.
+  \item \textbf{Shared database, separate schemas}: All tenants share a database server, but each tenant's tables reside in a distinct schema. This balances isolation with operational efficiency.
+  \item \textbf{Shared database, shared schema}: All tenants share the same tables, with a \texttt{tenant\_id} column discriminating records. This is the most resource-efficient but relies entirely on application logic for isolation.
+\end{enumerate}
+
+SmartHire adopts a variant of the second approach: rather than assigning one schema per tenant, it organises tables into domain-specific schemas (\texttt{organization}, \texttt{job}, \texttt{candidate}, \texttt{application}, \texttt{assessment}, \texttt{interview}) and uses foreign key relationships and application-level scoping to enforce tenant isolation. Supabase's Row-Level Security (RLS) policies provide an additional enforcement layer~\cite{supabase2024}.
 
 \section{Comparative Analysis}
 \label{sec:comparison}
 
+Table~\ref{tab:comparison} summarises the capabilities of the systems reviewed above in relation to SmartHire.
+
 \begin{table}[htbp]
 \centering
-\caption{Feature comparison of existing systems vs. SmartHire}
+\caption{Feature comparison of existing systems and SmartHire}
 \label{tab:comparison}
 \small
-\begin{tabular}{lccccc}
+\begin{tabular}{p{2.6in}ccccc}
 \toprule
-\textbf{Capability} & \textbf{Greenhouse} & \textbf{HackerRank} & \textbf{HireVue} & \textbf{TestGorilla} & \textbf{SmartHire} \\
+\textbf{Capability} & \rotatebox{60}{\textbf{Greenhouse}} & \rotatebox{60}{\textbf{HackerRank}} & \rotatebox{60}{\textbf{HireVue}} & \rotatebox{60}{\textbf{TestGorilla}} & \rotatebox{60}{\textbf{SmartHire}} \\
 \midrule
-ATS Pipeline Tracking          & \checkmark & ---        & ---        & ---        & \checkmark \\
-Automated Resume Scoring       & Partial    & ---        & ---        & ---        & \checkmark \\
-Timed MCQ Assessments          & ---        & \checkmark & ---        & \checkmark & \checkmark \\
-Browser Code Execution IDE     & ---        & \checkmark & ---        & ---        & \checkmark \\
-AI Video Interview Auditing    & ---        & ---        & \checkmark & ---        & \checkmark \\
-Stage Rejection Feedback       & Partial    & ---        & ---        & ---        & \checkmark \\
-Automated PDF Offer Generator   & \checkmark & ---        & ---        & ---        & \checkmark \\
-Unified Single-Platform SaaS   & ---        & ---        & ---        & ---        & \checkmark \\
+Applicant tracking pipeline    & \checkmark & ---        & ---        & ---        & \checkmark \\
+Automated resume scoring       & Partial    & ---        & ---        & ---        & \checkmark \\
+Timed MCQ assessments          & ---        & \checkmark & ---        & \checkmark & \checkmark \\
+Browser-based code execution   & ---        & \checkmark & ---        & ---        & \checkmark \\
+AI video interview evaluation  & ---        & ---        & \checkmark & ---        & \checkmark \\
+Stage-specific rejection feedback & Partial & ---        & ---        & ---        & \checkmark \\
+Offer letter generation        & \checkmark & ---        & ---        & ---        & \checkmark \\
+Unified platform (single login) & N/A      & N/A        & N/A        & N/A        & \checkmark \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -59,4 +116,14 @@ Unified Single-Platform SaaS   & ---        & ---        & ---        & ---     
 \section{Research Gap Identification}
 \label{sec:research-gap}
 
-Existing platforms leave three principal gaps: (1) Fragmented toolchains requiring manual score transfers across vendor portals; (2) Lack of transparent rejection feedback informing candidates of their specific disqualification stage; and (3) High subscription cost for licensing multiple standalone tools. SmartHire fills these gaps within a single SaaS ecosystem.
+The survey reveals three principal gaps:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Platform fragmentation}: No single commercially available system combines applicant tracking, resume scoring, MCQ assessment, coding evaluation, AI video interviewing, and offer management. Organisations must assemble a patchwork of tools, incurring integration costs and data consistency risks.
+
+  \item \textbf{Candidate feedback opacity}: Existing ATS platforms provide limited or no feedback to rejected candidates. Stage-specific rejection tracking---informing a candidate that they were screened out at, say, the coding assessment stage with a score of four out of ten---is not a standard feature in any of the reviewed systems.
+
+  \item \textbf{AI interview transparency}: Platforms that do offer AI-assisted video evaluation (notably HireVue) have been criticised for opaque scoring. A system that generates structured, readable scorecards with dimension-wise ratings provides greater transparency to both recruiters and candidates.
+\end{enumerate}
+
+SmartHire was designed to address all three gaps within a single platform, as described in the subsequent chapters.
