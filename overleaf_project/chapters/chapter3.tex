@@ -269,6 +269,10 @@ The production deployment runs on Vercel's serverless infrastructure, which prov
 \section{Risk Analysis}
 \label{sec:risk}
 
+Developing an autonomous recruitment platform involves navigating technical, operational, and security risks. Technical risks center on external API reliance (such as rate limits or transient outages on the Google Gemini API), database connection pool exhaustion under high application submission loads, and variations in candidate resume formatting that challenge PDF text extraction heuristics. Operational and security risks include potential cross-tenant data exposure and browser compatibility issues across candidate devices.
+
+To mitigate these risks, SmartHire incorporates defensive architectural patterns: API request queues with exponential backoff retries, connection pooling via PgBouncer on Supabase, candidate resume text preview/editing capabilities prior to submission, strict PostgreSQL Row-Level Security (RLS) policies, and comprehensive automated test suites. Table~\ref{tab:risk} presents the risk assessment matrix detailing identified risks, their likelihood and impact levels, and implemented mitigation strategies.
+
 \begin{table}[htbp]
 \centering
 \caption{Risk assessment matrix}

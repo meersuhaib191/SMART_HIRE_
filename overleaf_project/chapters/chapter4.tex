@@ -323,15 +323,15 @@ The ATS scoring process operates in two phases: text extraction and relevance co
 \centering
 \resizebox{0.95\textwidth}{!}{
 \begin{tikzpicture}[
-  step/.style={rectangle, draw=teal!80, fill=teal!5, rounded corners, text width=9.5em, text centered, minimum height=2.5em, font=\small},
-  arrow/.style={-latex, thick, color=gray!80!black}
+  step/.style={rectangle, draw=teal!80, fill=teal!5, rounded corners=6pt, text width=11em, text centered, minimum height=3.2em, font=\small\bfseries, align=center},
+  arrow/.style={-latex, ultra thick, color=teal!70!black}
 ]
   \node[step] (open) at (0,0) {Open Monaco IDE};
-  \node[step] (editor) at (4.2,0) {Write Code Solution};
-  \node[step] (submit) at (8.4,0) {Click Submit Solution};
-  \node[step] (exec) at (8.4,-2.2) {Execute Against Test Cases};
-  \node[step] (result) at (4.2,-2.2) {Evaluate Output Results};
-  \node[step] (score) at (0,-2.2) {Record Score in DB};
+  \node[step] (editor) at (4.8,0) {Write Code Solution};
+  \node[step] (submit) at (9.6,0) {Click Submit Solution};
+  \node[step] (exec) at (9.6,-2.8) {Execute Against\\Test Cases};
+  \node[step] (result) at (4.8,-2.8) {Evaluate Output\\Results};
+  \node[step] (score) at (0,-2.8) {Record Score in DB};
 
   \draw[arrow] (open) -- (editor);
   \draw[arrow] (editor) -- (submit);
@@ -374,22 +374,22 @@ Figure~\ref{fig:dfd2} expands the ATS scoring process from DFD Level~1 into its 
 \centering
 \resizebox{0.95\textwidth}{!}{
 \begin{tikzpicture}[
-  process/.style={circle, draw, fill=blue!10, minimum size=1.2cm, font=\footnotesize, text width=1.3cm, align=center},
-  store/.style={rectangle, draw, fill=red!5, minimum width=1.8cm, minimum height=0.5cm, font=\footnotesize},
-  arrow/.style={-latex, thick, font=\tiny}
+  process/.style={circle, draw=blue!80, fill=blue!10, minimum size=2.2cm, font=\small\bfseries, text width=2.0cm, align=center},
+  store/.style={rectangle, draw=red!80, fill=red!5, rounded corners=4pt, minimum width=2.8cm, minimum height=1.0cm, font=\small\bfseries, align=center},
+  arrow/.style={-latex, thick, color=gray!80!black, font=\footnotesize}
 ]
-  \node[process] (p1) at (0,2)   {Upload Handler};
-  \node[process] (p2) at (3.5,2) {PDF Text Extractor};
-  \node[process] (p3) at (7,2)   {Skill Parser};
-  \node[process] (p4) at (10.5,2) {Gemini Scorer};
-  \node[process] (p5) at (10.5,-0.5) {Score Normaliser};
+  \node[process] (p1) at (0,2.5)    {Upload\\Handler};
+  \node[process] (p2) at (3.8,2.5)  {PDF Text\\Extractor};
+  \node[process] (p3) at (7.6,2.5)  {Skill\\Parser};
+  \node[process] (p4) at (11.4,2.5) {Gemini\\Scorer};
+  \node[process] (p5) at (11.4,-1.0){Score\\Normaliser};
 
-  \node[store] (s1) at (0,-0.5) {Supabase Storage};
-  \node[store] (s2) at (5.5,-0.5) {candidate.resumes};
-  \node[store] (s3) at (10.5,-2.5) {application.applications};
+  \node[store] (s1) at (0,-1.0)    {Supabase Storage};
+  \node[store] (s2) at (7.6,-1.0)   {candidate.resumes};
+  \node[store] (s3) at (11.4,-3.8) {application.applications};
 
   \draw[arrow] (p1) -- (p2) node[midway, above] {raw PDF};
-  \draw[arrow] (p1) -- (s1) node[midway, left] {store file};
+  \draw[arrow] (p1) -- (s1) node[midway, right] {store file};
   \draw[arrow] (p2) -- (p3) node[midway, above] {plain text};
   \draw[arrow] (p3) -- (s2) node[midway, right] {parsed fields};
   \draw[arrow] (p3) -- (p4) node[midway, above] {skills + JD};
