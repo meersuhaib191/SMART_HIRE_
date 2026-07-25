@@ -2137,7 +2137,7 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                       }}
                       className="w-full bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold h-7.5 rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
                     >
-                      <Calendar className="h-3.5 w-3.5" /> Schedule AI Interview
+                      <Calendar className="h-3.5 w-3.5" /> Schedule AI Interview for All Candidates
                     </button>
 
                     <div className="pt-2 border-t border-zinc-100 space-y-2">
@@ -2194,7 +2194,6 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                         onReject={col.key === "offer_sent" ? undefined : (c) => handleRejectCandidate(c, col.key)}
                         onReinstate={(c) => handleReinstateCandidate(c, col.key)}
                         onFullScreen={(c) => setFullScreenModalCard(c as any)}
-                        onScheduleInterview={() => router.push(`/recruiter/jobs/${selectedJobId}/ai-interview`)}
                         nextStageName={nextCol?.name}
                       />
                     );

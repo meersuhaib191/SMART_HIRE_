@@ -306,21 +306,6 @@ export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstat
         <ScoreBadge card={card} />
       </div>
 
-      {/* Schedule AI Interview Button on Card */}
-      {(card.status === "interview" || card.status === "ai_interview") && onScheduleInterview && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onScheduleInterview(card);
-          }}
-          className="w-full mt-1.5 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-violet-600 hover:bg-violet-700 text-white shadow-xs transition-colors cursor-pointer"
-        >
-          <Calendar className="h-3 w-3" />
-          <span>Schedule AI Interview</span>
-        </button>
-      )}
-
       {/* Tags */}
       {card.tags && card.tags.length > 0 && (
         <div className="flex flex-wrap gap-1">

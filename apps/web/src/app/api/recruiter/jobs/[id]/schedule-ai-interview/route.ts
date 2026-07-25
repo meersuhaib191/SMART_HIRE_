@@ -107,7 +107,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .eq("id", finalAssessmentId);
     }
 
-    // 4. Fetch target applications
+    // 4. Fetch target applications (If applicationIds/candidateIds omitted, schedule ALL candidates for job)
     let targetApplications: any[] = [];
     if (Array.isArray(applicationIds) && applicationIds.length > 0) {
       const { data: apps } = await appClient
@@ -121,6 +121,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .select("id, candidate_id")
         .eq("job_id", jobId)
         .in("candidate_id", candidateIds);
+      targetApplications = apps || [];
+    } else {
+      // Schedule ALL candidates for this job in 1 action!
+      const { data: apps } = await appClient
+        .from("applications")
+        .select("id, candidate_id")
+        .eq("job_id", jobId);
       targetApplications = apps || [];
     }
 
