@@ -19,17 +19,11 @@ export function normalizeText(text: string): string {
  */
 function getPdfParseModule(): any {
   try {
-    // Prefer lib/pdf-parse.js directly to avoid pdf-parse index.js test-file loading bug
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("pdf-parse/lib/pdf-parse.js");
-  } catch {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require("pdf-parse");
-    } catch (err) {
-      logger.warn("[PDFExtractor] pdf-parse module require failed, using stream fallback", err);
-      return null;
-    }
+    return require("pdf-parse");
+  } catch (err) {
+    logger.warn("[PDFExtractor] pdf-parse module require failed, using stream fallback", err);
+    return null;
   }
 }
 
