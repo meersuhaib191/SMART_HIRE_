@@ -634,6 +634,59 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
     return new Date(tomorrow.getTime() - tzOffset).toISOString().slice(0, 16);
   }, []);
 
+  const handleSaveInterviewSchedule = React.useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedJobId) {
+      alert("Please select a job posting to schedule the interview.");
+      return;
+    }
+
+    try {
+      setInterviewSubmitting(true);
+
+      if (selectedInterviewType === "ai_interview") {
+        const res = await fetch(`/api/recruiter/jobs/${selectedJobId}/schedule-ai-interview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            applicationIds: interviewCard ? [interviewCard.id] : undefined,
+            scheduledStartAt: interviewDateTime ? new Date(interviewDateTime).toISOString() : new Date().toISOString(),
+            durationMinutes: Number(interviewDuration) || 60,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to schedule AI Interview");
+
+        alert(`Successfully scheduled AI Live Technical Interview (${data.durationMinutes || 60} mins) for candidate(s)!`);
+      } else {
+        if (interviewCard) {
+          const res = await fetch(`/api/applications/${interviewCard.id}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: "zoom_interview",
+              scheduled_at: interviewDateTime ? new Date(interviewDateTime).toISOString() : new Date().toISOString(),
+              meeting_link: meetingLink,
+            }),
+          });
+
+          if (!res.ok) throw new Error("Failed to schedule Recruiter Live Call");
+          alert("Successfully scheduled Recruiter Live Call!");
+        }
+      }
+
+      setInterviewModalOpen(false);
+      setInterviewCard(null);
+      setInterviewPdfFile(null);
+      await loadBoardData();
+    } catch (err: any) {
+      alert(`Scheduling error: ${err.message || String(err)}`);
+    } finally {
+      setInterviewSubmitting(false);
+    }
+  }, [selectedJobId, selectedInterviewType, interviewCard, interviewDateTime, interviewDuration, meetingLink, loadBoardData]);
+
   const handleRejectCandidate = React.useCallback(
     async (card: CandidateAppCard, currentStageKey: string) => {
       if (!confirm(`Reject candidate ${card.candidate_name} at ${currentStageKey.toUpperCase()} round?`)) {
@@ -1716,7 +1769,9 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                         onClick={(e) => {
                           e.stopPropagation();
                           if (selectedJobId) {
-                            router.push(`/recruiter/jobs/${selectedJobId}/ai-interview`);
+                            setSelectedInterviewType("ai_interview");
+                            setInterviewDateTime(getDefaultDatetimeLocal());
+                            setInterviewModalOpen(true);
                           }
                         }}
                         className="px-2.5 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
@@ -2132,7 +2187,9 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                     <button
                       onClick={() => {
                         if (selectedJobId) {
-                          router.push(`/recruiter/jobs/${selectedJobId}/ai-interview`);
+                          setSelectedInterviewType("ai_interview");
+                          setInterviewDateTime(getDefaultDatetimeLocal());
+                          setInterviewModalOpen(true);
                         }
                       }}
                       className="w-full bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold h-7.5 rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"

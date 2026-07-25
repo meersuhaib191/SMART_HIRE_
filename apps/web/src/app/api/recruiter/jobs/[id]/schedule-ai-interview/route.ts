@@ -38,9 +38,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .eq("id", jobId)
       .single();
 
-    if (!job) {
-      return NextResponse.json({ error: "Job posting not found" }, { status: 404 });
-    }
+    const body = await request.json().catch(() => ({}));
+    const {
+      candidateIds,
+      applicationIds,
+      scheduledStartAt,
+      durationMinutes,
+      title,
+    } = body;
+
+    const effectiveDurationMinutes = durationMinutes ? Number(durationMinutes) : 60;
+    const assessmentTitle = title || "AI Live Technical Interview";
 
     const { data: recruiterProfile } = await appClient
       .schema("recruiter")
