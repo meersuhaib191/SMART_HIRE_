@@ -634,59 +634,6 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
     return new Date(tomorrow.getTime() - tzOffset).toISOString().slice(0, 16);
   }, []);
 
-  const handleSaveInterviewSchedule = React.useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedJobId) {
-      alert("Please select a job posting to schedule the interview.");
-      return;
-    }
-
-    try {
-      setInterviewSubmitting(true);
-
-      if (selectedInterviewType === "ai_interview") {
-        const res = await fetch(`/api/recruiter/jobs/${selectedJobId}/schedule-ai-interview`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            applicationIds: interviewCard ? [interviewCard.id] : undefined,
-            scheduledStartAt: interviewDateTime ? new Date(interviewDateTime).toISOString() : new Date().toISOString(),
-            durationMinutes: Number(interviewDuration) || 60,
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to schedule AI Interview");
-
-        alert(`Successfully scheduled AI Live Technical Interview (${data.durationMinutes || 60} mins) for candidate(s)!`);
-      } else {
-        if (interviewCard) {
-          const res = await fetch(`/api/applications/${interviewCard.id}/status`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              status: "zoom_interview",
-              scheduled_at: interviewDateTime ? new Date(interviewDateTime).toISOString() : new Date().toISOString(),
-              meeting_link: meetingLink,
-            }),
-          });
-
-          if (!res.ok) throw new Error("Failed to schedule Recruiter Live Call");
-          alert("Successfully scheduled Recruiter Live Call!");
-        }
-      }
-
-      setInterviewModalOpen(false);
-      setInterviewCard(null);
-      setInterviewPdfFile(null);
-      await loadBoardData();
-    } catch (err: any) {
-      alert(`Scheduling error: ${err.message || String(err)}`);
-    } finally {
-      setInterviewSubmitting(false);
-    }
-  }, [selectedJobId, selectedInterviewType, interviewCard, interviewDateTime, interviewDuration, meetingLink, loadBoardData]);
-
   const handleRejectCandidate = React.useCallback(
     async (card: CandidateAppCard, currentStageKey: string) => {
       if (!confirm(`Reject candidate ${card.candidate_name} at ${currentStageKey.toUpperCase()} round?`)) {
@@ -1379,7 +1326,14 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
 
   const handleSaveInterviewSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!interviewCard || !interviewDateTime) return;
+    if (!selectedJobId) {
+      alert("Please select a job posting to schedule the interview.");
+      return;
+    }
+    if (!interviewDateTime) {
+      alert("Please select an interview start date and time.");
+      return;
+    }
     setInterviewSubmitting(true);
     try {
       const parsedDate = new Date(interviewDateTime);
@@ -1387,61 +1341,80 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
       const isAiMode = selectedInterviewType === "ai_interview";
       const targetStatus = isAiMode ? "interview" : "zoom_interview";
 
-      const res = await fetch("/api/interviews", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          applicationId: interviewCard.id,
-          scheduledAt: isoDate,
-          durationMinutes: Number(interviewDuration),
-          interviewerName: interviewerName || undefined,
-          interviewerEmail: interviewerEmail || undefined,
-          meetingLink: isAiMode ? undefined : (meetingLink || undefined),
-          notes: interviewNotes || undefined,
-          interviewType: selectedInterviewType,
-        }),
-      });
-
-      const resData = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(formatErrorMessage(resData, "Failed to schedule interview"));
-      }
-
-      // Sync application status to targetStatus ('interview' for AI Video Interview, 'zoom_interview' for Google Meet)
-      await fetch(`/api/applications/${interviewCard.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: targetStatus }),
-      }).catch(() => {});
-
-      // Optimistic state update & refresh
-      setCards((prev) =>
-        prev.map((c) =>
-          c.id === interviewCard.id
-            ? { ...c, status: targetStatus, interview_scheduled_at: isoDate }
-            : c
-        )
-      );
-
-      const scheduledCandidateName = interviewCard.candidate_name;
-
-      setInterviewModalOpen(false);
-      setInterviewCard(null);
-      setInterviewDateTime("");
-      setInterviewerName("");
-      setInterviewerEmail("");
-      setMeetingLink("");
-      setInterviewNotes("");
-
-      await fetchPipelineData();
-
       if (isAiMode) {
-        alert(`✅ AI Video Interview Round Successfully Scheduled!\n\nCandidate: ${scheduledCandidateName}\nDate & Time: ${new Date(isoDate).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}\n\n🤖 AI Interview Lobby is now enabled on the candidate's portal!`);
+        // Call dedicated AI Interview Scheduler API (supports all candidates or single candidate)
+        const res = await fetch(`/api/recruiter/jobs/${selectedJobId}/schedule-ai-interview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            applicationIds: interviewCard ? [interviewCard.id] : undefined,
+            scheduledStartAt: isoDate,
+            durationMinutes: Number(interviewDuration) || 60,
+          }),
+        });
+
+        const resData = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(resData.error || resData.message || "Failed to schedule AI Interview");
+        }
+
+        const scheduledTargetName = interviewCard ? interviewCard.candidate_name : "All Candidates";
+
+        setInterviewModalOpen(false);
+        setInterviewCard(null);
+        setInterviewDateTime("");
+
+        await fetchPipelineData();
+
+        alert(`✅ AI Live Technical Interview Successfully Scheduled (${resData.durationMinutes || 60} mins)!\n\nTarget: ${scheduledTargetName}\nDate & Time: ${new Date(isoDate).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}\n\n🤖 Candidates can now enter the AI Live Interview Room!`);
       } else {
+        if (!interviewCard) {
+          alert("Please select a specific candidate to schedule a Recruiter Live Call.");
+          setInterviewSubmitting(false);
+          return;
+        }
+
+        const res = await fetch("/api/interviews", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            applicationId: interviewCard.id,
+            scheduledAt: isoDate,
+            durationMinutes: Number(interviewDuration),
+            interviewerName: interviewerName || undefined,
+            interviewerEmail: interviewerEmail || undefined,
+            meetingLink: meetingLink || undefined,
+            notes: interviewNotes || undefined,
+            interviewType: selectedInterviewType,
+          }),
+        });
+
+        const resData = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(formatErrorMessage(resData, "Failed to schedule interview"));
+        }
+
+        await fetch(`/api/applications/${interviewCard.id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: targetStatus }),
+        }).catch(() => {});
+
         const finalMeetLink = resData.data?.meeting_link || meetingLink;
-        alert(`✅ Recruiter Google Meet Interview Successfully Scheduled!\n\nCandidate: ${scheduledCandidateName}\nGoogle Meet Link: ${finalMeetLink}\nDate & Time: ${new Date(isoDate).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}`);
+
+        setInterviewModalOpen(false);
+        setInterviewCard(null);
+        setInterviewDateTime("");
+        setInterviewerName("");
+        setInterviewerEmail("");
+        setMeetingLink("");
+        setInterviewNotes("");
+
+        await fetchPipelineData();
+
+        alert(`✅ Recruiter Google Meet Interview Successfully Scheduled!\n\nCandidate: ${interviewCard.candidate_name}\nGoogle Meet Link: ${finalMeetLink}\nDate & Time: ${new Date(isoDate).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}`);
       }
-      logger.info(`[PipelinePage] Interview (${selectedInterviewType}) scheduled for application: ${interviewCard.id}`);
+      logger.info(`[PipelinePage] Interview (${selectedInterviewType}) scheduled for job: ${selectedJobId}`);
     } catch (err: unknown) {
       logger.error("Failed to save interview schedule", err);
       const msg = err instanceof Error ? err.message : formatErrorMessage(err, "Failed to schedule interview");
