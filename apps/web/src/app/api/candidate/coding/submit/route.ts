@@ -3,6 +3,7 @@ import { createAppClient } from "@/utils/supabase/application";
 import { evaluateCodeWithGemini, GeminiCodingEvaluationResult } from "@/services/ai/gemini-evaluator";
 import { logger } from "@smarthire/logger";
 import { executeUniversalCode } from "../run/route";
+import { normalizeStdinInput, compareOutputs } from "@/utils/code-comparator";
 
 function normalizeOutput(output: string): string {
   return String(output ?? "")
@@ -311,18 +312,18 @@ export async function POST(request: NextRequest) {
         const tcWeight = tc.weight ? Number(tc.weight) : 10;
         totalWeight += tcWeight;
 
-        const inputStr = String(tc.input ?? "").trim();
+        const normInput = normalizeStdinInput(tc.input);
         const expectedStr = String(tc.expectedOutput ?? "").trim();
 
-        let actualOutput = "";
-        let executionFailed = false;
-        try {
-          actualOutput = executeUniversalCode(candidateCode, candidateLang, inputStr);
-        } catch {
-          executionFailed = true;
-        }
+        const execRes = executeUniversalCode(candidateCode, candidateLang, normInput);
+        let isPassed = false;
+        let testStatus = execRes.status;
 
-        const isPassed = !executionFailed && outputsMatch(actualOutput, expectedStr);
+        if (execRes.status === "ACCEPTED") {
+          const comp = compareOutputs(execRes.stdout, expectedStr, opts.comparisonOptions);
+          isPassed = comp.passed;
+          testStatus = isPassed ? "ACCEPTED" : "WRONG_ANSWER";
+        }
 
         if (isPassed) {
           passedCount++;
@@ -331,9 +332,9 @@ export async function POST(request: NextRequest) {
 
         testResults.push({
           id: tc.id || `tc-${testResults.length}`,
-          input: tc.hidden ? "[HIDDEN]" : inputStr,
+          input: tc.hidden ? "[HIDDEN]" : normInput,
           expected: tc.hidden ? "[HIDDEN]" : expectedStr,
-          actual: tc.hidden ? (isPassed ? "[PASSED]" : "[FAILED]") : actualOutput,
+          actual: tc.hidden ? (isPassed ? "[PASSED]" : "[FAILED]") : execRes.stdout,
           passed: isPassed,
           hidden: Boolean(tc.hidden),
         });

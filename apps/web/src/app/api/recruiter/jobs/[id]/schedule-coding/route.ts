@@ -3,6 +3,8 @@ import { createAppClient } from "@/utils/supabase/application";
 import { createJobClient } from "@/utils/supabase/job";
 import { createAssessmentClient } from "@/utils/supabase/assessment";
 import { logger } from "@smarthire/logger";
+import { executeUniversalCode } from "@/app/api/candidate/coding/run/route";
+import { normalizeStdinInput, compareOutputs } from "@/utils/code-comparator";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -95,6 +97,47 @@ export async function POST(request: NextRequest, context: RouteContext) {
     } else {
       logger.error("Failed to create coding assessment template", createTplErr);
       return NextResponse.json({ error: "Failed to initialize coding assessment template" }, { status: 500 });
+    }
+
+    // 2.5 Validation: Validate test cases and run Reference Solution if provided
+    for (let idx = 0; idx < jsonQuestions.length; idx++) {
+      const q = jsonQuestions[idx];
+      const title = (q.title || q.name || `Problem ${idx + 1}`).toString().trim();
+      const rawTestCases = Array.isArray(q.testCases) ? q.testCases : (Array.isArray(q.options?.testCases) ? q.options.testCases : []);
+
+      if (rawTestCases.length === 0) {
+        return NextResponse.json({ error: `Problem ${idx + 1} ("${title}") has no test cases configured.` }, { status: 400 });
+      }
+
+      for (let tcIdx = 0; tcIdx < rawTestCases.length; tcIdx++) {
+        const tc = rawTestCases[tcIdx];
+        if (tc.expectedOutput === undefined || tc.expectedOutput === null || String(tc.expectedOutput).trim() === "") {
+          return NextResponse.json({ error: `Problem ${idx + 1} ("${title}"), Test Case ${tcIdx + 1} is missing expected output.` }, { status: 400 });
+        }
+      }
+
+      // Check reference solution if present
+      const refSol = q.referenceSolution || q.solution || q.solutionCode || q.referenceSolutions?.python || q.referenceSolutions?.javascript;
+      const refLang = q.language || "python";
+
+      if (refSol && typeof refSol === "string" && refSol.trim().length > 10) {
+        let failedRefCases = 0;
+        for (const tc of rawTestCases) {
+          const normInput = normalizeStdinInput(tc.input);
+          const expectedStr = String(tc.expectedOutput ?? "").trim();
+          const execRes = executeUniversalCode(refSol, refLang, normInput);
+          const comp = compareOutputs(execRes.stdout, expectedStr, q.comparisonOptions);
+          if (!comp.passed) {
+            failedRefCases++;
+          }
+        }
+
+        if (failedRefCases > 0) {
+          return NextResponse.json({
+            error: `Assessment validation failed: Reference solution for problem '${title}' failed ${failedRefCases} of ${rawTestCases.length} test cases.`
+          }, { status: 400 });
+        }
+      }
     }
 
     // 3. Clear previous questions for this assessment template and insert new ones

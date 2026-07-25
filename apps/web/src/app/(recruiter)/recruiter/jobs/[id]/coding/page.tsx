@@ -16,6 +16,7 @@ import {
   Loader2,
   Eye,
   Layers,
+  RefreshCw,
   X
 } from "lucide-react";
 import { logger } from "@smarthire/logger";
@@ -34,6 +35,7 @@ interface CandidateCodingItem {
   submittedAt?: string;
   passedCount?: number;
   totalCount?: number;
+  attemptId?: string;
   code?: string;
   geminiResult?: any;
 }
@@ -48,8 +50,28 @@ export default function RecruiterCodingDetailsPage() {
   const [candidates, setCandidates] = React.useState<CandidateCodingItem[]>([]);
   const [search, setSearch] = React.useState("");
   const [selectedResult, setSelectedResult] = React.useState<CandidateCodingItem | null>(null);
+  const [reEvaluating, setReEvaluating] = React.useState(false);
 
   const supabase = createClient();
+
+  const handleReEvaluate = async (attemptId: string) => {
+    try {
+      setReEvaluating(true);
+      const res = await fetch("/api/recruiter/assessments/re-evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ attemptId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Re-evaluation failed");
+      await fetchCodingData();
+      setSelectedResult(null);
+    } catch (err: any) {
+      alert(`Re-evaluation error: ${err.message}`);
+    } finally {
+      setReEvaluating(false);
+    }
+  };
 
   const handleReturn = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -142,6 +164,7 @@ export default function RecruiterCodingDetailsPage() {
           submittedAt: att?.completed_at ? new Date(att.completed_at).toLocaleDateString() : undefined,
           passedCount: att?.answers?.passedCases ?? undefined,
           totalCount: att?.answers?.totalCases ?? undefined,
+          attemptId: att?.id,
           code: att?.answers?.code || undefined,
           geminiResult: att?.answers?.geminiResult || att?.answers?.geminiEvaluation,
         };
@@ -326,12 +349,24 @@ export default function RecruiterCodingDetailsPage() {
                 <h2 className="text-xl font-extrabold text-white mt-0.5">{selectedResult.first_name} {selectedResult.last_name}</h2>
                 <p className="text-xs text-zinc-400 font-medium">{selectedResult.email} • Language: {selectedResult.language?.toUpperCase()}</p>
               </div>
-              <button
-                onClick={() => setSelectedResult(null)}
-                className="p-2 text-zinc-400 hover:text-white bg-zinc-800 rounded-xl transition-all cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedResult.attemptId && (
+                  <button
+                    onClick={() => handleReEvaluate(selectedResult.attemptId!)}
+                    disabled={reEvaluating}
+                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow-sm cursor-pointer"
+                  >
+                    {reEvaluating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    <span>{reEvaluating ? "Re-evaluating..." : "Re-evaluate Submission"}</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedResult(null)}
+                  className="p-2 text-zinc-400 hover:text-white bg-zinc-800 rounded-xl transition-all cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Scrollable Body */}
