@@ -18,16 +18,20 @@ export interface GeminiServiceResponse<T> {
   latencyMs?: number;
 }
 
-/**
- * Supported models hierarchy in order of preference
- */
-const GEMINI_MODELS = [
-  "gemini-2.5-flash",
+const DEFAULT_GEMINI_MODELS = [
+  "gemini-flash-latest",
   "gemini-2.0-flash",
   "gemini-1.5-flash",
   "gemini-1.5-pro",
-  "gemini-flash-latest",
 ];
+
+function getModelHierarchy(): string[] {
+  const customModel = process.env.GEMINI_TEXT_MODEL?.trim();
+  if (customModel) {
+    return [customModel, ...DEFAULT_GEMINI_MODELS.filter((m) => m !== customModel)];
+  }
+  return DEFAULT_GEMINI_MODELS;
+}
 
 function getApiKey(): string | null {
   const key =
@@ -36,6 +40,33 @@ function getApiKey(): string | null {
     process.env.GEMINI_KEY;
 
   return key && key.trim().length > 0 ? key.trim() : null;
+}
+
+/**
+ * Safely extracts and parses JSON content from LLM response text,
+ * handling markdown code fences and extraneous pre/post text.
+ */
+function extractAndParseJson<T>(rawText: string): T {
+  const cleaned = rawText
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch (initialErr) {
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const jsonSub = cleaned.substring(firstBrace, lastBrace + 1);
+      return JSON.parse(jsonSub) as T;
+    }
+
+    throw new Error(
+      `JSON parsing failed: ${initialErr instanceof Error ? initialErr.message : "Malformed JSON"}`
+    );
+  }
 }
 
 /**
@@ -50,20 +81,21 @@ export async function generateStructuredGeminiResponse<T>(params: {
   const apiKey = getApiKey();
 
   if (!apiKey) {
-    logger.warn("[GeminiService] GEMINI_API_KEY is not configured server-side.");
+    logger.warn("[GeminiService] GEMINI_API_KEY is not configured server-side. Key configured: false");
     return {
       success: false,
       errorCategory: "GEMINI_KEY_MISSING",
-      errorMessage: "Gemini API key not configured in environment.",
+      errorMessage: "Gemini API key is not configured in server environment (GEMINI_API_KEY).",
     };
   }
 
+  const modelsToTry = getModelHierarchy();
   const timeoutMs = params.timeoutMs || 12000;
   let lastErrorCategory: GeminiErrorCategory = "GEMINI_UNKNOWN_ERROR";
   let lastErrorMessage = "Failed to communicate with Gemini API.";
 
   // Iterate over candidate models
-  for (const modelName of GEMINI_MODELS) {
+  for (const modelName of modelsToTry) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -87,23 +119,25 @@ export async function generateStructuredGeminiResponse<T>(params: {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "");
-        logger.error(`[GeminiService] Model ${modelName} returned HTTP ${response.status}: ${errorText.slice(0, 200)}`);
+        logger.error(
+          `[GeminiService] Model ${modelName} HTTP ${response.status}: ${errorText.slice(0, 150)}`
+        );
 
         if (response.status === 401 || response.status === 403) {
           lastErrorCategory = "GEMINI_AUTH_FAILED";
-          lastErrorMessage = `API Key authentication failed (HTTP ${response.status}).`;
+          lastErrorMessage = `Gemini API key authentication/authorization failed (HTTP ${response.status}).`;
           break; // Don't retry invalid auth key
         } else if (response.status === 429) {
           lastErrorCategory = "GEMINI_RATE_LIMITED";
-          lastErrorMessage = "Gemini API rate limit or quota exceeded.";
+          lastErrorMessage = "Gemini API rate limit or quota exceeded (HTTP 429).";
           continue; // Try fallback model
         } else if (response.status === 404) {
           lastErrorCategory = "GEMINI_MODEL_ERROR";
-          lastErrorMessage = `Model ${modelName} not available.`;
+          lastErrorMessage = `Model ${modelName} not available (HTTP 404).`;
           continue; // Try fallback model
         } else {
           lastErrorCategory = "GEMINI_UNKNOWN_ERROR";
-          lastErrorMessage = `HTTP ${response.status} error from Gemini API.`;
+          lastErrorMessage = `HTTP ${response.status} error from Gemini provider.`;
           continue;
         }
       }
@@ -111,20 +145,21 @@ export async function generateStructuredGeminiResponse<T>(params: {
       const resData = await response.json();
       const rawText = resData?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-      if (!rawText) {
+      if (!rawText || typeof rawText !== "string" || rawText.trim().length === 0) {
         lastErrorCategory = "GEMINI_INVALID_RESPONSE";
-        lastErrorMessage = "Gemini response contained no text content.";
+        lastErrorMessage = "Gemini API returned an empty response candidate.";
         continue;
       }
 
-      const cleanedText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
-      const parsedData: T = JSON.parse(cleanedText);
+      const parsedData = extractAndParseJson<T>(rawText);
+      const latencyMs = Date.now() - startTime;
+      logger.info(`[GeminiService] Successfully generated response using model=${modelName} in ${latencyMs}ms`);
 
       return {
         success: true,
         data: parsedData,
         modelUsed: modelName,
-        latencyMs: Date.now() - startTime,
+        latencyMs,
       };
     } catch (err: any) {
       if (err.name === "AbortError") {
@@ -132,23 +167,28 @@ export async function generateStructuredGeminiResponse<T>(params: {
         lastErrorCategory = "GEMINI_TIMEOUT";
         lastErrorMessage = `Gemini API request timed out after ${timeoutMs}ms.`;
       } else {
-        logger.error(`[GeminiService] Error calling model ${modelName}:`, err);
+        logger.error(`[GeminiService] Model ${modelName} parsing/execution error: ${err.message || String(err)}`);
         lastErrorCategory = "GEMINI_INVALID_RESPONSE";
-        lastErrorMessage = err instanceof Error ? err.message : "Failed to parse Gemini response.";
+        lastErrorMessage = err instanceof Error ? err.message : "Failed to parse Gemini response payload.";
       }
     }
   }
+
+  const totalLatencyMs = Date.now() - startTime;
+  logger.warn(
+    `[GeminiService] All models failed. Error Category: ${lastErrorCategory}, Message: ${lastErrorMessage}, Total Latency: ${totalLatencyMs}ms`
+  );
 
   return {
     success: false,
     errorCategory: lastErrorCategory,
     errorMessage: lastErrorMessage,
-    latencyMs: Date.now() - startTime,
+    latencyMs: totalLatencyMs,
   };
 }
 
 /**
- * Health Check helper for Gemini integration (Never exposes key)
+ * Health Check helper for Gemini integration (Never exposes secret key)
  */
 export async function getGeminiHealth(): Promise<{
   configured: boolean;
@@ -161,12 +201,12 @@ export async function getGeminiHealth(): Promise<{
     return {
       configured: false,
       operational: false,
-      notice: "GEMINI_API_KEY is not configured.",
+      notice: "GEMINI_API_KEY environment variable is not configured server-side.",
     };
   }
 
   const result = await generateStructuredGeminiResponse<{ status: string }>({
-    prompt: `Respond with JSON: {"status": "ok"}`,
+    prompt: `Respond ONLY with valid JSON: {"status": "ok"}`,
     timeoutMs: 5000,
   });
 
@@ -174,6 +214,6 @@ export async function getGeminiHealth(): Promise<{
     configured: true,
     operational: result.success,
     model: result.modelUsed,
-    notice: result.success ? "Gemini AI is operational." : result.errorMessage,
+    notice: result.success ? "Gemini AI is fully operational." : result.errorMessage,
   };
 }

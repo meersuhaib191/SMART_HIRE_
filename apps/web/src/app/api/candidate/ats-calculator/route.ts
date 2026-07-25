@@ -103,11 +103,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Execute Deterministic Core ATS Analysis (MANDATORY & ISOLATED)
+    const atsStartTime = Date.now();
     const result = ATSEngine.evaluate(finalResumeText, finalJdText);
-    logger.info(`[ATS Stage] ATS_EVALUATED (Score: ${result.atsScore}%, Matched: ${result.matchedSkills.length}, Missing: ${result.missingSkills.length})`);
+    const atsCalcMs = Date.now() - atsStartTime;
+    logger.info(`[ATS Stage] ATS_EVALUATED in ${atsCalcMs}ms (Score: ${result.atsScore}%, Matched: ${result.matchedSkills.length}, Missing: ${result.missingSkills.length})`);
 
     // 6. Generate Gemini AI Resume Suggestions (OPTIONAL ENRICHMENT — NEVER FAILS ATS ROUTE)
     let aiSuggestions = null;
+    const geminiStartTime = Date.now();
     try {
       aiSuggestions = await generateGeminiAtsSuggestions({
         resumeText: finalResumeText,
@@ -115,9 +118,11 @@ export async function POST(request: NextRequest) {
         jobTitle: jobTitleInput,
         atsBreakdown: result,
       });
-      logger.info(`[ATS Stage] GEMINI_COMPLETE (available: ${aiSuggestions.available})`);
+      const geminiReqMs = Date.now() - geminiStartTime;
+      logger.info(`[ATS Stage] GEMINI_COMPLETE in ${geminiReqMs}ms (available: ${aiSuggestions.available}, status: ${aiSuggestions.status})`);
     } catch (err) {
-      logger.warn("[ATS Stage] Gemini suggestion enrichment failed gracefully", err);
+      const geminiReqMs = Date.now() - geminiStartTime;
+      logger.warn(`[ATS Stage] Gemini suggestion enrichment failed gracefully in ${geminiReqMs}ms`, err);
       aiSuggestions = {
         strengths: [],
         missingSkills: [],
@@ -125,17 +130,19 @@ export async function POST(request: NextRequest) {
         projectRecommendations: [],
         resumeImprovements: [],
         available: false,
+        status: "api_error" as const,
         notice: "AI resume suggestions are temporarily unavailable. Your deterministic ATS match score is fully computed below.",
       };
     }
 
     const latencyMs = Date.now() - startTime;
-    logger.info(`[ATS Stage] REQUEST_COMPLETE in ${latencyMs}ms`);
+    logger.info(`[ATS Stage] REQUEST_COMPLETE in ${latencyMs}ms (atsCalc: ${atsCalcMs}ms, geminiReq: ${Date.now() - geminiStartTime}ms)`);
 
     return NextResponse.json({
       success: true,
       result,
       aiSuggestions,
+      aiSuggestionsStatus: aiSuggestions?.status || "unavailable",
       resumeExtractedLength: finalResumeText.length,
       jdExtractedLength: finalJdText.length,
       latencyMs,

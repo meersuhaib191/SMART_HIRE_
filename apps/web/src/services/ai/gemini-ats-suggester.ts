@@ -9,15 +9,16 @@ export interface GeminiAtsSuggestions {
   projectRecommendations: string[];
   resumeImprovements: string[];
   available: boolean;
+  status: "completed" | "key_missing" | "auth_failed" | "rate_limited" | "timeout" | "invalid_response" | "api_error" | "unavailable";
   notice?: string;
 }
 
 interface RawGeminiAtsOutput {
-  strengths: string[];
-  missingSkills: string[];
-  experienceAlignment: string[];
-  projectRecommendations: string[];
-  resumeImprovements: string[];
+  strengths?: string[];
+  missingSkills?: string[];
+  experienceAlignment?: string[];
+  projectRecommendations?: string[];
+  resumeImprovements?: string[];
 }
 
 /**
@@ -31,6 +32,7 @@ export async function generateGeminiAtsSuggestions(params: {
   jobTitle?: string;
   atsBreakdown: AtsScoreBreakdown;
 }): Promise<GeminiAtsSuggestions> {
+  const startTime = Date.now();
   const prompt = `You are an expert ATS Career Coach and Executive Resume Strategist.
 Analyze the candidate's resume content against the target job description.
 
@@ -79,8 +81,35 @@ Return ONLY valid JSON matching this schema:
     temperature: 0.2,
   });
 
+  const durationMs = Date.now() - startTime;
+
   if (!result.success || !result.data) {
-    logger.warn(`[GeminiAtsSuggester] Gemini unavailable: ${result.errorMessage}`);
+    let internalStatus: GeminiAtsSuggestions["status"] = "unavailable";
+    switch (result.errorCategory) {
+      case "GEMINI_KEY_MISSING":
+        internalStatus = "key_missing";
+        break;
+      case "GEMINI_AUTH_FAILED":
+        internalStatus = "auth_failed";
+        break;
+      case "GEMINI_RATE_LIMITED":
+        internalStatus = "rate_limited";
+        break;
+      case "GEMINI_TIMEOUT":
+        internalStatus = "timeout";
+        break;
+      case "GEMINI_INVALID_RESPONSE":
+        internalStatus = "invalid_response";
+        break;
+      default:
+        internalStatus = "api_error";
+        break;
+    }
+
+    logger.warn(
+      `[GeminiAtsSuggester] Gemini ATS suggestions unavailable (status=${internalStatus}, duration=${durationMs}ms): ${result.errorMessage}`
+    );
+
     return {
       strengths: [],
       missingSkills: [],
@@ -88,11 +117,13 @@ Return ONLY valid JSON matching this schema:
       projectRecommendations: [],
       resumeImprovements: [],
       available: false,
+      status: internalStatus,
       notice: "AI resume suggestions are temporarily unavailable. Your ATS analysis is still available below.",
     };
   }
 
   const data = result.data;
+  logger.info(`[GeminiAtsSuggester] Gemini suggestions successfully calculated in ${durationMs}ms`);
 
   return {
     strengths: Array.isArray(data.strengths) ? data.strengths : [],
@@ -101,5 +132,6 @@ Return ONLY valid JSON matching this schema:
     projectRecommendations: Array.isArray(data.projectRecommendations) ? data.projectRecommendations : [],
     resumeImprovements: Array.isArray(data.resumeImprovements) ? data.resumeImprovements : [],
     available: true,
+    status: "completed",
   };
 }
