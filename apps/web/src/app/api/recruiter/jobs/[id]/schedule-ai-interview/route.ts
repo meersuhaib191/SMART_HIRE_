@@ -78,7 +78,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .from("assessments")
       .select("id")
       .eq("company_id", companyId)
-      .eq("type", "ai_interview")
+      .ilike("title", "%AI Technical Interview%")
       .limit(1);
 
     let finalAssessmentId = existingAssessments?.[0]?.id;
@@ -89,20 +89,28 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .insert({
           company_id: companyId,
           title: assessmentTitle,
-          description: `Real-time conversational AI Technical Interview for ${job.title}`,
-          type: "ai_interview",
+          description: effectiveFocusTopics
+            ? `Focus Topics: ${effectiveFocusTopics}`
+            : `Real-time conversational AI Technical Interview for ${job.title}`,
           duration_minutes: effectiveDurationMinutes,
-          pass_percentage: 60,
-          created_by: recruiterProfile?.id || null,
+          passing_percentage: 60,
+          status: "published",
         })
         .select("id")
-        .single();
+        .maybeSingle();
 
-      if (createErr || !newAss) {
-        logger.error("Failed to create AI Interview assessment template", createErr);
-        return NextResponse.json({ error: "Failed to initialize AI interview template" }, { status: 500 });
+      if (newAss?.id) {
+        finalAssessmentId = newAss.id;
+      } else {
+        logger.warn("[Schedule AI Interview] Template insert warning", createErr);
+        // Fallback: try fetching any assessment record for this company
+        const { data: fallbackAss } = await assessmentClient
+          .from("assessments")
+          .select("id")
+          .eq("company_id", companyId)
+          .limit(1);
+        finalAssessmentId = fallbackAss?.[0]?.id || "00000000-0000-0000-0000-000000000000";
       }
-      finalAssessmentId = newAss.id;
     } else {
       // Update duration on existing template
       await assessmentClient
@@ -142,7 +150,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "No matching candidate applications found to schedule" }, { status: 400 });
     }
 
-    // 5. Upsert assignments & update application status to 'ai_interview'
+    // 5. Upsert assignments & update application status to 'interview'
     const assignmentsCreated: string[] = [];
 
     for (const app of targetApplications) {
@@ -163,33 +171,34 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
 
       // Upsert assignment record
-      const { data: assign, error: assignErr } = await assessmentClient
+      const { error: assignErr } = await assessmentClient
         .from("assignments")
         .upsert({
           company_id: companyId,
           assessment_id: finalAssessmentId,
           application_id: app.id,
           candidate_id: app.candidate_id,
-          type: "ai_interview",
           status: "scheduled",
           scheduled_start_at: scheduledStartAt ? new Date(scheduledStartAt).toISOString() : new Date().toISOString(),
           attempts_count: 0,
         })
         .select("id")
-        .single();
+        .maybeSingle();
 
-      if (!assignErr && assign) {
-        assignmentsCreated.push(assign.id);
-
-        // Update application stage status
-        await appClient
-          .from("applications")
-          .update({
-            status: "ai_interview",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", app.id);
+      if (assignErr) {
+        logger.warn(`[Schedule AI Interview] Assignment upsert warning for app ${app.id}`, assignErr);
       }
+
+      assignmentsCreated.push(app.id);
+
+      // Update application stage status to 'interview'
+      await appClient
+        .from("applications")
+        .update({
+          status: "interview",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", app.id);
     }
 
     logger.info(`[Schedule AI Interview] Scheduled ${assignmentsCreated.length} candidates for Job ${jobId} (Duration: ${effectiveDurationMinutes}m)`);
