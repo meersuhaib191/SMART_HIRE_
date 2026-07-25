@@ -32,9 +32,12 @@ export default function JobDetailsLayout({ children }: { children: React.ReactNo
   const fetchJobDetails = React.useCallback(async () => {
     try {
       const res = await fetch(`/api/jobs/${jobId}`);
-      if (!res.ok) throw new Error("Failed to fetch job details");
+      if (!res.ok) {
+        logger.warn(`[JobDetailsLayout] /api/jobs/${jobId} returned HTTP ${res.status}`);
+        return;
+      }
       const { data } = await res.json();
-      setJob(data);
+      if (data) setJob(data);
     } catch (err) {
       logger.error("Failed to load job details layout", err);
     } finally {

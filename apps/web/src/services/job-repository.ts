@@ -64,19 +64,24 @@ export const jobRepository = {
    */
   getJobById: async (jobId: string) => {
     logger.info(`Repository: Fetching job by ID: ${jobId}`);
-    const supabase = await createJobClient();
+    const jobClient = await createJobClient();
 
-    const { data, error } = await supabase
+    let { data } = await jobClient
       .from("jobs")
       .select("*")
       .eq("id", jobId)
-      .is("deleted_at", null)
       .maybeSingle();
 
-    if (error) {
-      logger.error("Repository error: getJobById failed", error);
-      throw toError(error);
+    if (!data) {
+      const appClient = await createAppClient();
+      const { data: fallbackData } = await appClient
+        .from("jobs")
+        .select("*")
+        .eq("id", jobId)
+        .maybeSingle();
+      data = fallbackData;
     }
+
     return data;
   },
 
