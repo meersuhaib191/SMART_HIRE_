@@ -54,6 +54,23 @@ export default function CandidateInterviewsPage() {
           return;
         }
 
+        // Fetch template duration map from assessments tables (schema assessment + public)
+        const templateDurationMap = new Map<string, number>();
+        const { data: tmplSchemaList } = await supabase
+          .schema("assessment")
+          .from("assessments")
+          .select("id, duration_minutes");
+        (tmplSchemaList || []).forEach((t: any) => {
+          if (t.duration_minutes) templateDurationMap.set(t.id, Number(t.duration_minutes));
+        });
+
+        const { data: tmplPublicList } = await supabase
+          .from("assessments")
+          .select("id, duration_minutes");
+        (tmplPublicList || []).forEach((t: any) => {
+          if (t.duration_minutes) templateDurationMap.set(t.id, Number(t.duration_minutes));
+        });
+
         // Fetch job titles for all job_ids returned
         const jobIds = [...new Set((rows || []).map((r: any) => r.job_id).filter(Boolean))];
         let jobsList: { id: string; title: string }[] = [];
@@ -70,12 +87,15 @@ export default function CandidateInterviewsPage() {
           .filter((r: any) => r.status !== "rescheduled")
           .map((r: any) => {
             const job = jobsList.find((j) => j.id === r.job_id);
+            const tmplDuration = r.assessment_id ? templateDurationMap.get(r.assessment_id) : undefined;
+            const finalDuration = tmplDuration || (r.duration_minutes ? Number(r.duration_minutes) : 60);
+
             return {
               id: r.id,
-              interview_type: r.meeting_title || r.type || "Technical Interview",
+              interview_type: r.meeting_title || r.type || "AI Technical Interview",
               status: r.status || "scheduled",
               scheduled_at: r.start_time || null,
-              duration_minutes: r.duration_minutes || 60,
+              duration_minutes: finalDuration,
               meeting_link: r.meeting_link || undefined,
               job_title: job?.title || "Software Engineering Position",
               source: r.source || "scheduled",
