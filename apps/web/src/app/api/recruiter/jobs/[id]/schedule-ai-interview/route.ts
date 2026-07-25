@@ -178,7 +178,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           assessment_id: finalAssessmentId,
           application_id: app.id,
           candidate_id: app.candidate_id,
-          status: "scheduled",
+          status: "assigned",
           scheduled_start_at: scheduledStartAt ? new Date(scheduledStartAt).toISOString() : new Date().toISOString(),
           attempts_count: 0,
         })
