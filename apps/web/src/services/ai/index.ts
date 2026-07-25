@@ -25,3 +25,8 @@ export type { ISkillExtractor, SkillExtractorInput, ExtractedSkill, SkillCategor
 export type { ICandidateRanker, CandidateRankerInput, CandidateRankingEntry, CandidateProfile } from "./interfaces/candidate-ranker.interface";
 export type { IJobMatcher, JobMatcherInput, JobMatch, JobPosting } from "./interfaces/job-matcher.interface";
 export type { IQuestionGenerator, QuestionGeneratorInput, GeneratedQuestion, QuestionCategory, QuestionDifficulty } from "./interfaces/question-generator.interface";
+
+// Central Gemini AI Service
+export { generateStructuredGeminiResponse, getGeminiHealth } from "./gemini-service";
+export { generateGeminiAtsSuggestions } from "./gemini-ats-suggester";
+export { evaluateCodeWithGemini } from "./gemini-evaluator";

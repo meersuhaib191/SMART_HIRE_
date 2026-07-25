@@ -9,6 +9,7 @@ import {
 import { logger } from "@smarthire/logger";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
+import { isTechDomain } from "@/utils/domain-utils";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -35,6 +36,7 @@ interface AssignmentItem {
 interface JobGroup {
   jobId: string;
   jobTitle: string;
+  jobCategory?: string | null;
   appliedAt: string;
   applicationStatus: string;
   assignments: AssignmentItem[];
@@ -64,34 +66,46 @@ const STAGE_LABELS: Record<string, string> = {
   rejected: "Rejected",
 };
 
-function StageProgressBar({ currentStatus }: { currentStatus: string }) {
-  const idx = STAGE_ORDER.indexOf(currentStatus);
+function StageProgressBar({ currentStatus, isTech = true }: { currentStatus: string; isTech?: boolean }) {
+  const stages = isTech ? STAGE_ORDER : STAGE_ORDER.filter((s) => s !== "coding");
+  const idx = stages.indexOf(currentStatus);
+
   return (
     <div className="flex items-center gap-0 w-full mt-3">
-      {STAGE_ORDER.map((stage, i) => {
+      {stages.map((stage, i) => {
         const isCompleted = i < idx;
         const isCurrent = i === idx;
+        const rawLabel = STAGE_LABELS[stage] || stage;
+        const label = `${i + 1}. ${rawLabel.replace(/^\d+\.\s*/, "")}`;
+
         return (
           <React.Fragment key={stage}>
             <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
               <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold border-2 transition-all ${isCompleted
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold border-2 transition-all ${
+                  isCompleted
                     ? "bg-emerald-500 border-emerald-500 text-white"
                     : isCurrent
-                      ? "bg-blue-600 border-blue-600 text-white ring-4 ring-blue-100"
-                      : "bg-white border-zinc-200 text-zinc-400"
-                  }`}
+                    ? "bg-blue-600 border-blue-600 text-white ring-4 ring-blue-100"
+                    : "bg-white border-zinc-200 text-zinc-400"
+                }`}
               >
                 {isCompleted ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
               </div>
-              <span className={`text-[9px] font-semibold truncate w-full text-center ${isCurrent ? "text-blue-600" : isCompleted ? "text-emerald-600" : "text-zinc-400"
-                }`}>
-                {STAGE_LABELS[stage]}
+              <span
+                className={`text-[9px] font-semibold truncate w-full text-center ${
+                  isCurrent ? "text-blue-600" : isCompleted ? "text-emerald-600" : "text-zinc-400"
+                }`}
+              >
+                {label}
               </span>
             </div>
-            {i < STAGE_ORDER.length - 1 && (
-              <div className={`h-0.5 flex-1 mb-4 rounded-full transition-all ${i < idx ? "bg-emerald-400" : "bg-zinc-200"
-                }`} />
+            {i < stages.length - 1 && (
+              <div
+                className={`h-0.5 flex-1 mb-4 rounded-full transition-all ${
+                  i < idx ? "bg-emerald-400" : "bg-zinc-200"
+                }`}
+              />
             )}
           </React.Fragment>
         );
@@ -168,6 +182,7 @@ function ScoreRing({ score, total, passed }: { score: number; total: number; pas
 
 function AssessmentCard({ item, now }: { item: AssignmentItem; now: Date }) {
   const isCompleted = Boolean(item.attempt?.completed_at || (item.status === "completed" && item.attempt));
+  const isUnscheduled = !isCompleted && !item.scheduled_start_at;
   const isFuture = item.scheduled_start_at ? new Date(item.scheduled_start_at) > now : false;
   const isExpired = item.expires_at ? new Date(item.expires_at) < now && !isCompleted : false;
 
@@ -178,7 +193,7 @@ function AssessmentCard({ item, now }: { item: AssignmentItem; now: Date }) {
   const Icon = typeColor.icon;
 
   return (
-    <div className={`rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 ${isCompleted ? "border-emerald-200" : isExpired ? "border-red-200 opacity-75" : isFuture ? "border-amber-200" : "border-zinc-200 hover:border-blue-300"
+    <div className={`rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 ${isCompleted ? "border-emerald-200" : isExpired ? "border-red-200 opacity-75" : isUnscheduled ? "border-zinc-200 opacity-90" : isFuture ? "border-amber-200" : "border-zinc-200 hover:border-blue-300"
       }`}>
       {/* Card Header */}
       <div className={`bg-gradient-to-r ${typeColor.bg} px-5 py-4`}>
@@ -203,6 +218,10 @@ function AssessmentCard({ item, now }: { item: AssignmentItem; now: Date }) {
           ) : isExpired ? (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold">
               <AlertCircle className="h-3 w-3" /> Expired
+            </span>
+          ) : isUnscheduled ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold">
+              <Clock className="h-3 w-3" /> Unscheduled
             </span>
           ) : isFuture ? (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold animate-pulse">
@@ -247,6 +266,13 @@ function AssessmentCard({ item, now }: { item: AssignmentItem; now: Date }) {
           </div>
         )}
 
+        {/* Unscheduled notice */}
+        {isUnscheduled && (
+          <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200 font-medium">
+            Recruiter has not scheduled the date & time for this MCQ round yet. Entry is locked until scheduled.
+          </p>
+        )}
+
         {/* Completion Date */}
         {isCompleted && item.attempt?.completed_at && (
           <p className="text-[10px] text-zinc-400 italic">
@@ -257,15 +283,31 @@ function AssessmentCard({ item, now }: { item: AssignmentItem; now: Date }) {
         {/* CTA */}
         <div className="pt-2 border-t border-zinc-100">
           {isCompleted ? (
-            <div className="flex items-center gap-2 text-emerald-600">
-              <CheckCircle2 className="h-4 w-4" />
-              <span className="text-xs font-bold">Assessment Complete</span>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-emerald-600">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="text-xs font-bold">Assessment Complete</span>
+              </div>
+              {item.type === "coding" && (
+                <div className="flex gap-2">
+                  <Link
+                    href={`/candidate/coding/${item.id}/exam`}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] px-3 py-1.5 rounded-lg border border-blue-200 transition-all cursor-pointer"
+                  >
+                    View Result
+                  </Link>
+                </div>
+              )}
             </div>
           ) : isExpired ? (
             <div className="flex items-center gap-2 text-red-500">
               <AlertCircle className="h-4 w-4" />
               <span className="text-xs font-bold">This assessment has expired</span>
             </div>
+          ) : isUnscheduled ? (
+            <Button disabled className="w-full h-9 text-xs font-bold rounded-xl opacity-60 cursor-not-allowed bg-zinc-100 text-zinc-500 border border-zinc-200">
+              <Lock className="h-3.5 w-3.5 mr-1.5" /> Locked - Pending Recruiter Schedule
+            </Button>
           ) : isFuture ? (
             <Button disabled className="w-full h-9 text-xs font-bold rounded-xl opacity-60 cursor-not-allowed">
               <Lock className="h-3.5 w-3.5 mr-1.5" /> Locked Until Scheduled Time
@@ -397,12 +439,15 @@ export default function CandidateAssessmentsPage() {
             const isCoding = codingIds.has(assignment.assessment_id) ||
               Boolean(tmpl?.title?.toLowerCase().includes("coding"));
 
-            // isDone = only if attempt was actually completed OR real score recorded in application OR status passed this stage
-            const isDone = assignment.status === "completed" ||
+            // If assignment was explicitly reset to "assigned" (recruiter rescheduled), it is NOT done
+            const wasRescheduled = assignment.status === "assigned";
+            const isDone = !wasRescheduled && (
+              assignment.status === "completed" ||
               Boolean(attempt?.completed_at) ||
               (isCoding
                 ? (app.coding_score != null || COMPLETED_CODING_STAGES.includes(app.status))
-                : (app.mcq_score != null || COMPLETED_MCQ_STAGES.includes(app.status)));
+                : (app.mcq_score != null || COMPLETED_MCQ_STAGES.includes(app.status)))
+            );
 
             const rawScore = attempt?.score ?? (isCoding ? app.coding_score : app.mcq_score);
             const normScore = isDone ? parseNormalizedScore(rawScore) : null;
@@ -413,7 +458,7 @@ export default function CandidateAssessmentsPage() {
               application_id: assignment.application_id,
               title: tmpl?.title ?? (isCoding ? `${job?.title || "Coding"} Round` : `${job?.title || "MCQ"} Assessment`),
               type: isCoding ? "coding" : "mcq",
-              duration_minutes: !isCoding ? (tmpl?.duration_minutes && tmpl.duration_minutes <= 15 ? tmpl.duration_minutes : 10) : (tmpl?.duration_minutes && tmpl.duration_minutes <= 30 ? tmpl.duration_minutes : 30),
+              duration_minutes: tmpl?.duration_minutes ? Number(tmpl.duration_minutes) : (isCoding ? 60 : 15),
               scheduled_start_at: assignment.scheduled_start_at || (isCoding ? job?.coding_scheduled_start_at : job?.mcq_scheduled_start_at) || null,
               expires_at: assignment.expires_at,
               status: isDone ? "completed" : assignment.status,
@@ -434,8 +479,11 @@ export default function CandidateAssessmentsPage() {
 
           if ((recruiterAssignedMcq || appHasReachedMcqStage) && !mapped.some(m => m.type === "mcq")) {
             const tmpl = (templates || []).find(t => t.id === job?.mcq_assessment_id);
-            // MCQ is done only if real score exists or status has moved PAST mcq stage (coding/interview/...)
-            const isMcqDone = app.mcq_score != null || COMPLETED_MCQ_STAGES.includes(app.status);
+            // Check if there's a reset assignment for this MCQ
+            const mcqAssignment = appAssignments.find(a => a.assessment_id === job?.mcq_assessment_id);
+            const mcqWasRescheduled = mcqAssignment?.status === "assigned";
+            // MCQ is done only if real score exists or status has moved PAST mcq stage, AND not rescheduled
+            const isMcqDone = !mcqWasRescheduled && (app.mcq_score != null || COMPLETED_MCQ_STAGES.includes(app.status));
             const mcqNormScore = isMcqDone ? parseNormalizedScore(app.mcq_score) : null;
 
             mapped.push({
@@ -458,15 +506,19 @@ export default function CandidateAssessmentsPage() {
             });
           }
 
-          // Coding card: ONLY show if recruiter assigned AND app has moved PAST mcq stage (reached coding or beyond)
+          // Coding card: ONLY show if job is in Tech domain AND recruiter assigned AND app has moved PAST mcq stage
+          const isTechJob = isTechDomain(job?.category, job?.title);
           const codingStagesReached = ["coding", "interview", "recruiter_review", "zoom_interview", "offer_sent", "offered", "joined"];
           const recruiterAssignedCoding = Boolean(job?.coding_assessment_id);
           const appHasReachedCodingStage = codingStagesReached.includes(app.status);
 
-          if (recruiterAssignedCoding && appHasReachedCodingStage && !mapped.some(m => m.type === "coding")) {
+          if (isTechJob && recruiterAssignedCoding && appHasReachedCodingStage && !mapped.some(m => m.type === "coding")) {
             const tmpl = (templates || []).find(t => t.id === job?.coding_assessment_id);
-            // Coding done only if real score exists or status has moved PAST coding stage
-            const isCodingDone = app.coding_score != null || COMPLETED_CODING_STAGES.includes(app.status);
+            // Check if there's a reset assignment for this coding assessment
+            const codingAssignment = appAssignments.find(a => a.assessment_id === job?.coding_assessment_id);
+            const codingWasRescheduled = codingAssignment?.status === "assigned";
+            // Coding done only if real score exists or status has moved PAST coding stage, AND not rescheduled
+            const isCodingDone = !codingWasRescheduled && (app.coding_score != null || COMPLETED_CODING_STAGES.includes(app.status));
             const codingNormScore = isCodingDone ? parseNormalizedScore(app.coding_score) : null;
 
             mapped.push({
@@ -492,6 +544,7 @@ export default function CandidateAssessmentsPage() {
           return {
             jobId: app.job_id,
             jobTitle: job?.title ?? "Unknown Position",
+            jobCategory: job?.category || null,
             appliedAt: app.created_at,
             applicationStatus: app.status,
             assignments: mapped,
@@ -635,7 +688,7 @@ export default function CandidateAssessmentsPage() {
                           </>
                         )}
                       </div>
-                      <StageProgressBar currentStatus={group.applicationStatus} />
+                      <StageProgressBar currentStatus={group.applicationStatus} isTech={isTechDomain(group.jobCategory, group.jobTitle)} />
                     </div>
                   </div>
 

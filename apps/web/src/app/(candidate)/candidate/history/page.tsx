@@ -4,6 +4,7 @@ import * as React from "react";
 import { Loader2, Calendar, Briefcase, Trophy, CheckCircle2, Search, Filter, History, Sparkles, Building2, MapPin, FileText } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { createBrowserClient } from "@supabase/ssr";
+import { isTechDomain } from "@/utils/domain-utils";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -268,40 +269,47 @@ export default function CandidateJobHistoryPage() {
               </div>
 
               {/* Evaluation scorecards bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-zinc-50/70 p-3 rounded-xl border border-zinc-100 text-xs font-mono">
-                <div>
-                  <span className="text-[9px] font-bold text-zinc-400 block uppercase">ATS Score</span>
-                  <span className="font-extrabold text-zinc-800">
-                    {r.score != null
-                      ? r.score <= 10
-                        ? `${Number(r.score).toFixed(1)}/10 (${Math.round(r.score * 10)}%)`
-                        : `${Math.round(r.score)}%`
-                      : "N/A"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[9px] font-bold text-zinc-400 block uppercase">MCQ Exam</span>
-                  <span className="font-extrabold text-zinc-800">
-                    {r.mcq_score != null ? `${Math.round(r.mcq_score)}%` : "N/A"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[9px] font-bold text-zinc-400 block uppercase">Coding IDE</span>
-                  <span className="font-extrabold text-zinc-800">
-                    {r.coding_score != null
-                      ? r.coding_score <= 10
-                        ? `${Number(r.coding_score).toFixed(0)}/10 (${Math.round(r.coding_score * 10)}%)`
-                        : `${Math.round(r.coding_score)}%`
-                      : "N/A"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[9px] font-bold text-zinc-400 block uppercase">AI Interview</span>
-                  <span className="font-extrabold text-zinc-800">
-                    {r.interview_avg_score != null ? `${Number(r.interview_avg_score).toFixed(1)}/10` : "N/A"}
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                const isTechJob = isTechDomain(r.category, r.job_title);
+                return (
+                  <div className={`grid ${isTechJob ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"} gap-3 bg-zinc-50/70 p-3 rounded-xl border border-zinc-100 text-xs font-mono`}>
+                    <div>
+                      <span className="text-[9px] font-bold text-zinc-400 block uppercase">ATS Score</span>
+                      <span className="font-extrabold text-zinc-800">
+                        {r.score != null
+                          ? r.score <= 10
+                            ? `${Number(r.score).toFixed(1)}/10 (${Math.round(r.score * 10)}%)`
+                            : `${Math.round(r.score)}%`
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-zinc-400 block uppercase">MCQ Exam</span>
+                      <span className="font-extrabold text-zinc-800">
+                        {r.mcq_score != null ? `${Math.round(r.mcq_score)}%` : "N/A"}
+                      </span>
+                    </div>
+                    {isTechJob && (
+                      <div>
+                        <span className="text-[9px] font-bold text-zinc-400 block uppercase">Coding IDE</span>
+                        <span className="font-extrabold text-zinc-800">
+                          {r.coding_score != null
+                            ? r.coding_score <= 10
+                              ? `${Number(r.coding_score).toFixed(0)}/10 (${Math.round(r.coding_score * 10)}%)`
+                              : `${Math.round(r.coding_score)}%`
+                            : "N/A"}
+                        </span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-[9px] font-bold text-zinc-400 block uppercase">AI Interview</span>
+                      <span className="font-extrabold text-zinc-800">
+                        {r.interview_avg_score != null ? `${Number(r.interview_avg_score).toFixed(1)}/10` : "N/A"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Actions Footer */}
               <div className="flex items-center justify-between pt-1">

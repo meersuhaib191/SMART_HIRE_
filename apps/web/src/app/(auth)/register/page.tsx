@@ -20,7 +20,7 @@ const registerSchema = z.object({
     .regex(/[A-Z]/, "Must contain at least one uppercase letter")
     .regex(/\d/, "Must contain at least one number")
     .regex(/[^A-Za-z0-9]/, "Must contain at least one symbol"),
-  role: z.enum(["candidate", "recruiter", "company-admin"] as const),
+  role: z.enum(["candidate", "recruiter"] as const),
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -142,7 +142,7 @@ export default function RegisterPage() {
           <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
             Account Type
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <label className="flex items-center justify-center border border-zinc-300 rounded-xl p-2.5 text-xs font-semibold text-zinc-700 bg-white cursor-pointer hover:border-blue-600 transition-colors [&:has(input:checked)]:border-blue-600 [&:has(input:checked)]:bg-blue-50 [&:has(input:checked)]:text-blue-700">
               <input
                 type="radio"
@@ -162,16 +162,6 @@ export default function RegisterPage() {
                 {...register("role")}
               />
               <span>Recruiter</span>
-            </label>
-            <label className="flex items-center justify-center border border-zinc-300 rounded-xl p-2.5 text-xs font-semibold text-zinc-700 bg-white cursor-pointer hover:border-blue-600 transition-colors [&:has(input:checked)]:border-blue-600 [&:has(input:checked)]:bg-blue-50 [&:has(input:checked)]:text-blue-700">
-              <input
-                type="radio"
-                value="company-admin"
-                disabled={loading}
-                className="sr-only"
-                {...register("role")}
-              />
-              <span>Admin</span>
             </label>
           </div>
         </div>

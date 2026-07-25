@@ -269,17 +269,36 @@ export const AssessmentService = {
       let pointsEarned = 0;
 
       if (candidateAns !== undefined && candidateAns !== null) {
-        if (q.questionType === "mcq" || q.questionType === "true-false" || q.questionType === "short-answer") {
-          // Compare strings (case-insensitive)
-          const cleanCorrect = String(q.correctAnswer ?? "").trim().toLowerCase();
-          const cleanCandidate = String(candidateAns).trim().toLowerCase();
+        const rawCorrectVal = q.correct_answer ?? q.correctAnswer ?? "";
+        const cleanCorrect = String(rawCorrectVal).trim().toLowerCase();
+        let candidateText = String(candidateAns).trim();
+
+        // If candidate submitted option id (e.g. opt-1) or letter, resolve to option text if possible
+        if (Array.isArray(q.options)) {
+          const matchedOpt = q.options.find((opt: any, i: number) => {
+            const optId = typeof opt === "object" ? opt.id : `opt-${i}`;
+            const optTxt = typeof opt === "object" ? (opt.text || opt.option || String(opt)) : String(opt);
+            return optId === candidateText || optTxt.trim().toLowerCase() === candidateText.toLowerCase();
+          });
+          if (matchedOpt) {
+            candidateText = typeof matchedOpt === "object" ? (matchedOpt.text || matchedOpt.option || String(matchedOpt)) : String(matchedOpt);
+          }
+        }
+
+        const cleanCandidate = candidateText.trim().toLowerCase();
+
+        if (q.questionType === "mcq" || q.questionType === "true-false" || q.questionType === "short-answer" || !q.questionType) {
           if (cleanCorrect && cleanCorrect === cleanCandidate) {
             correct = true;
-            pointsEarned = q.points;
+            pointsEarned = q.points || 1;
           }
         } else if (q.questionType === "multiple-select") {
-          // Compare lists of strings
-          const correctList = JSON.parse(q.correctAnswer || "[]").map((s: string) => s.trim().toLowerCase());
+          let correctList: string[] = [];
+          try {
+            correctList = JSON.parse(rawCorrectVal || "[]").map((s: string) => String(s).trim().toLowerCase());
+          } catch {
+            correctList = [cleanCorrect];
+          }
           const candidateList = (Array.isArray(candidateAns) ? candidateAns : [candidateAns]).map((s: string) => String(s).trim().toLowerCase());
 
           const match = correctList.length === candidateList.length &&
@@ -287,13 +306,8 @@ export const AssessmentService = {
 
           if (match) {
             correct = true;
-            pointsEarned = q.points;
+            pointsEarned = q.points || 1;
           }
-        } else {
-          // Coding and File Upload questions cannot be auto-graded natively in this step
-          // Default to manual grading review (0 points initially, stores candidate response)
-          correct = false;
-          pointsEarned = 0;
         }
       }
 
@@ -338,8 +352,8 @@ export const AssessmentService = {
         if (appRecord && appRecord.job_id) {
           const jobRecord = await jobRepository.getJobById(appRecord.job_id);
           if (jobRecord) {
-            const isMcq = jobRecord.mcq_assessment_id === attempt.assessmentId;
             const isCoding = jobRecord.coding_assessment_id === attempt.assessmentId;
+            const isMcq = jobRecord.mcq_assessment_id === attempt.assessmentId || !isCoding;
 
             if (isMcq) {
               await applicationRepository.updateStageScores(attempt.applicationId, {

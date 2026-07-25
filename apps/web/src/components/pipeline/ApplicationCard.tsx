@@ -3,7 +3,7 @@
 import * as React from "react";
 import {
   ClipboardCheck, Code2, Star, Award, Calendar,
-  Mail, Clock, ChevronRight, Zap, XCircle, RotateCcw
+  Mail, Clock, ChevronRight, Zap, XCircle, RotateCcw, Maximize2
 } from "lucide-react";
 
 export interface CandidateAppCard {
@@ -38,6 +38,7 @@ interface ApplicationCardProps {
   onAdvance?: (card: CandidateAppCard) => void;
   onReject?: (card: CandidateAppCard) => void;
   onReinstate?: (card: CandidateAppCard) => void;
+  onFullScreen?: (card: CandidateAppCard) => void;
   nextStageName?: string;
 }
 
@@ -56,25 +57,39 @@ function MiniScoreBar({ value, max, color }: { value: number; max: number; color
   );
 }
 
+export function normalizeAtsScore(score: number | null | undefined): { normalizedPct: number; display10: string } {
+  if (score === null || score === undefined || isNaN(Number(score))) {
+    return { normalizedPct: 0, display10: "0.0" };
+  }
+  const val = Number(score);
+  let normalizedPct = 0;
+  if (val <= 1) {
+    normalizedPct = Math.round(val * 100);
+  } else if (val <= 10) {
+    normalizedPct = Math.round(val * 10);
+  } else {
+    normalizedPct = Math.round(Math.min(100, Math.max(0, val)));
+  }
+  const display10 = (normalizedPct / 10).toFixed(1);
+  return { normalizedPct, display10 };
+}
+
 function ScoreBadge({ card }: { card: CandidateAppCard }) {
   const { status } = card;
 
   if (status === "screening" && card.screening_score != null) {
-    const pct = (card.screening_score / 10) * 100;
+    const { normalizedPct, display10 } = normalizeAtsScore(card.screening_score);
     return (
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-            <Zap className="h-3 w-3 text-amber-500" /> ATS Score
+      <div className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-xl px-2.5 py-1.5">
+        <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
+          <Zap className="h-3 w-3 text-amber-500" /> ATS Score
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`text-xs font-bold ${normalizedPct >= 70 ? "text-emerald-600" : normalizedPct >= 40 ? "text-amber-600" : "text-red-600"}`}>
+            {normalizedPct}%
           </span>
-          <span className={`text-xs font-bold ${pct >= 70 ? "text-emerald-600" : pct >= 40 ? "text-amber-600" : "text-red-600"}`}>
-            {card.screening_score}/10
-          </span>
+          <span className="text-[10px] font-bold text-zinc-400">({display10}/10)</span>
         </div>
-        <MiniScoreBar
-          value={card.screening_score} max={10}
-          color={pct >= 70 ? "bg-emerald-400" : pct >= 40 ? "bg-amber-400" : "bg-red-400"}
-        />
       </div>
     );
   }
@@ -204,7 +219,7 @@ const AVATAR_COLORS = [
   "from-rose-500 to-pink-600",
 ];
 
-export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstate, nextStageName }: ApplicationCardProps) {
+export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstate, onFullScreen, nextStageName }: ApplicationCardProps) {
   const isRejected = card.status === "rejected" || card.status === "withdrawn";
   const isOfferStage = ["offer_sent", "offered", "offer_accepted", "joined"].includes(card.status);
 
@@ -304,57 +319,40 @@ export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstat
         </div>
       )}
 
-      {/* Footer: Action Buttons */}
-      <div className="flex items-center justify-between pt-2 border-t border-zinc-100 gap-1 flex-wrap">
-        {isRejected ? (
-          onReinstate && (
+      {/* Footer info & optional reinstate */}
+      {(isRejected || onFullScreen) && (
+        <div className="flex items-center justify-between pt-2 border-t border-zinc-100 gap-1 flex-wrap">
+          {isRejected && onReinstate && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onReinstate(card);
               }}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 transition-colors shadow-2xs cursor-pointer ml-auto"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 transition-colors cursor-pointer"
               title="Reinstate candidate into active pipeline"
             >
               <RotateCcw className="h-3 w-3" />
               <span>Reinstate</span>
             </button>
-          )
-        ) : (
-          <>
-            {onReject && !isOfferStage && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReject(card);
-                }}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 transition-colors shadow-2xs cursor-pointer"
-                title="Reject candidate at this stage"
-              >
-                <XCircle className="h-3 w-3" />
-                <span>Reject</span>
-              </button>
-            )}
+          )}
 
-            {onAdvance && nextStageName && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAdvance(card);
-                }}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-100 transition-colors shadow-2xs cursor-pointer ml-auto"
-                title={`Advance candidate to ${nextStageName}`}
-              >
-                <span>Advance</span>
-                <ChevronRight className="h-3 w-3" />
-              </button>
-            )}
-          </>
-        )}
-      </div>
+          {onFullScreen && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onFullScreen(card);
+              }}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer ml-auto"
+              title="Open Full Screen Applicant View"
+            >
+              <Maximize2 className="h-3 w-3 text-blue-600" />
+              <span>Full Details ⛶</span>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -212,15 +212,33 @@ export default function CreateJobPage() {
     setActiveStep((prev) => prev - 1);
   };
 
-  const onSubmit = async (values: JobWizardValues) => {
+  const [applicationDeadline, setApplicationDeadline] = React.useState<string>(() => {
+    const nextWeek = new Date(Date.now() + 7 * 86400000);
+    const tzOffset = nextWeek.getTimezoneOffset() * 60000;
+    return new Date(nextWeek.getTime() - tzOffset).toISOString().slice(0, 16);
+  });
+
+  const handleCreateWithStatus = async (targetStatus: "draft" | "published") => {
     if (!companyId) return;
-    logger.info(`[CreateJobPage] Registering job: ${values.title}`);
+
+    if (targetStatus === "published") {
+      if (!applicationDeadline) {
+        setErrorMsg("Please select a valid application deadline before publishing this job.");
+        return;
+      }
+      if (new Date(applicationDeadline) <= new Date()) {
+        setErrorMsg("Application deadline must be in the future.");
+        return;
+      }
+    }
+
     setLoading(true);
     setErrorMsg(null);
 
-    // Merge rich text text areas for PostgreSQL description column
+    const values = watchedValues;
+
     const fullDescription = `
-      ${values.description}
+      ${values.description || ""}
       ${values.responsibilities ? `\n\n### Responsibilities\n${values.responsibilities}` : ""}
       ${values.requirements ? `\n\n### Requirements\n${values.requirements}` : ""}
       ${values.benefits ? `\n\n### Benefits\n${values.benefits}` : ""}
@@ -233,14 +251,15 @@ export default function CreateJobPage() {
         body: JSON.stringify({
           companyId,
           recruiterId: values.recruiterId || undefined,
-          title: values.title,
-          description: fullDescription,
-          location: values.location,
-          type: values.type,
-          status: values.status,
-          experienceLevel: values.experienceLevel,
+          title: values.title || "Untitled Job",
+          description: fullDescription || "Job Description",
+          location: values.location || "Remote",
+          type: values.type || "full-time",
+          status: targetStatus,
+          experienceLevel: values.experienceLevel || "mid",
           category: values.category || null,
           benefits: values.benefits ? values.benefits.split("\n") : [],
+          applicationDeadline: applicationDeadline ? new Date(applicationDeadline).toISOString() : null,
         }),
       });
 
@@ -249,8 +268,9 @@ export default function CreateJobPage() {
         throw new Error(data.message || data.error || "Failed to create job posting");
       }
 
-      logger.info("[CreateJobPage] Job created successfully");
+      logger.info(`[CreateJobPage] Job created successfully with status: ${targetStatus}`);
       localStorage.removeItem(LOCAL_STORAGE_KEY);
+      alert(targetStatus === "published" ? "🎉 Job published successfully!" : "✅ Job saved as draft successfully.");
       router.push("/recruiter/jobs");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Creation failed. Please check inputs.";
@@ -324,7 +344,7 @@ export default function CreateJobPage() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
           {errorMsg && (
             <div className="rounded-xl bg-red-50 border border-red-200 p-3.5 text-xs font-semibold text-red-600">
               {errorMsg}
@@ -497,31 +517,42 @@ export default function CreateJobPage() {
           )}
 
           {/* STEP 3: PUBLISHING STATE Choice */}
+          {/* STEP 3: STATUS & APPLICATION DEADLINE */}
           {activeStep === 3 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-200 text-left">
+              {/* Application Deadline Picker */}
+              <div className="space-y-1.5 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
+                <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider block">
+                  Application Deadline *
+                </label>
+                <p className="text-[11px] text-zinc-500 font-medium">
+                  Select when applications for this position will close. Required before publishing live.
+                </p>
+                <input
+                  type="datetime-local"
+                  required
+                  value={applicationDeadline}
+                  onChange={(e) => setApplicationDeadline(e.target.value)}
+                  className="w-full sm:w-72 rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-xs font-bold text-zinc-900 focus:border-blue-600 focus:outline-none shadow-2xs"
+                />
+              </div>
+
               <div className="space-y-2">
                 <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
-                  Posting Status Choice
+                  Posting Lifecycle Option
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div
                     onClick={() => setValue("status", "draft")}
                     className={`flex flex-col items-center justify-center border rounded-2xl p-6 text-center cursor-pointer transition-all shadow-sm ${
                       watchedValues?.status === "draft"
-                        ? "border-blue-600 bg-blue-50 ring-2 ring-blue-500/20"
-                        : "border-zinc-200 bg-white hover:border-blue-400"
+                        ? "border-zinc-900 bg-zinc-900 text-white shadow-md"
+                        : "border-zinc-200 bg-white hover:border-zinc-400 text-zinc-900"
                     }`}
                   >
-                    <input
-                      type="radio"
-                      value="draft"
-                      className="sr-only"
-                      {...register("status")}
-                      checked={watchedValues?.status === "draft"}
-                    />
-                    <span className="font-bold text-zinc-900 text-sm">Save as Draft</span>
-                    <span className="text-xs text-zinc-500 mt-1.5 leading-relaxed max-w-[180px]">
-                      Internal preview only. Candidate pipeline will not open.
+                    <span className="font-extrabold text-base">Save as Draft</span>
+                    <span className={`text-xs mt-1.5 leading-relaxed max-w-[180px] ${watchedValues?.status === "draft" ? "text-zinc-300" : "text-zinc-500"}`}>
+                      Save posting details without opening public candidate applications.
                     </span>
                   </div>
 
@@ -529,22 +560,15 @@ export default function CreateJobPage() {
                     onClick={() => setValue("status", "published")}
                     className={`flex flex-col items-center justify-center border rounded-2xl p-6 text-center cursor-pointer transition-all shadow-sm ${
                       watchedValues?.status === "published"
-                        ? "border-blue-600 bg-blue-50 ring-2 ring-blue-500/20"
-                        : "border-zinc-200 bg-white hover:border-blue-400"
+                        ? "border-blue-600 bg-blue-600 text-white shadow-md"
+                        : "border-zinc-200 bg-white hover:border-blue-400 text-zinc-900"
                     }`}
                   >
-                    <input
-                      type="radio"
-                      value="published"
-                      className="sr-only"
-                      {...register("status")}
-                      checked={watchedValues?.status === "published"}
-                    />
-                    <span className="font-bold text-blue-600 text-sm flex items-center gap-1.5">
-                      <Sparkles className="h-4 w-4" /> Publish Live
+                    <span className="font-extrabold text-base flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4" /> Publish Job Live
                     </span>
-                    <span className="text-xs text-zinc-500 mt-1.5 leading-relaxed max-w-[180px]">
-                      Publish opening immediately to candidate job directory.
+                    <span className={`text-xs mt-1.5 leading-relaxed max-w-[180px] ${watchedValues?.status === "published" ? "text-blue-100" : "text-zinc-500"}`}>
+                      Publish immediately to candidate job marketplace & open application pipeline.
                     </span>
                   </div>
                 </div>
@@ -585,19 +609,30 @@ export default function CreateJobPage() {
                 Next <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
-              <Button
-                type="submit"
-                disabled={loading || !companyId}
-                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 h-10 px-6 rounded-xl text-xs font-semibold transition-colors duration-150"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-white" />
-                ) : (
-                  <>
-                    Complete & Save <Check className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={loading || !companyId}
+                  onClick={() => handleCreateWithStatus("draft")}
+                  className="px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-bold text-xs transition-colors cursor-pointer border border-zinc-300 disabled:opacity-50"
+                >
+                  Save as Draft
+                </button>
+                <button
+                  type="button"
+                  disabled={loading || !companyId}
+                  onClick={() => handleCreateWithStatus("published")}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs transition-colors cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" /> Publish Job Now
+                    </>
+                  )}
+                </button>
+              </div>
             )}
           </div>
         </form>

@@ -20,6 +20,8 @@ export const jobCreateSchema = z
     benefits: z.array(z.string()).default([]),
     mcqAssessmentId: z.string().uuid("Invalid MCQ assessment ID").optional().nullable(),
     codingAssessmentId: z.string().uuid("Invalid coding assessment ID").optional().nullable(),
+    applicationDeadline: z.string().optional().nullable(),
+    publishedAt: z.string().optional().nullable(),
   })
   .refine(
     (data) => {
@@ -52,6 +54,8 @@ export const jobUpdateSchema = z
     benefits: z.array(z.string()).optional(),
     mcqAssessmentId: z.string().uuid("Invalid MCQ assessment ID").optional().nullable(),
     codingAssessmentId: z.string().uuid("Invalid coding assessment ID").optional().nullable(),
+    applicationDeadline: z.string().optional().nullable(),
+    publishedAt: z.string().optional().nullable(),
   })
   .refine(
     (data) => {

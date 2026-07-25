@@ -128,17 +128,27 @@ export default function RecruiterProfilePage() {
           }
         }
 
-        // Fetch user's recruiter record from database
+        // Fetch user's recruiter record from database as primary source of truth
         const { data: recruiter } = await supabase
           .schema("organization")
           .from("recruiters")
-          .select("company_id, id, title")
+          .select("company_id, id, title, first_name, last_name, email, phone, avatar_url, profile_completed")
           .eq("user_id", user.id)
           .is("deleted_at", null)
           .maybeSingle();
 
         if (recruiter) {
+          if (recruiter.first_name) setRecruiterFirstName(recruiter.first_name);
+          if (recruiter.last_name) setRecruiterLastName(recruiter.last_name);
+          if (recruiter.email) setRecruiterEmail(recruiter.email);
+          if (recruiter.phone) setRecruiterPhone(recruiter.phone);
           if (recruiter.title) setRecruiterTitle(recruiter.title);
+          if (recruiter.avatar_url) setRecruiterAvatar(recruiter.avatar_url);
+
+          if (!recruiter.profile_completed || !recruiter.company_id) {
+            setIsFirstTime(true);
+          }
+
           if (recruiter.company_id) {
             setCompanyId(recruiter.company_id);
 
@@ -183,10 +193,6 @@ export default function RecruiterProfilePage() {
       setErrorMsg("Company name is required to complete your employer profile.");
       return;
     }
-    if (!recruiterAvatar) {
-      setErrorMsg("Recruiter profile picture is required. Please upload your recruiter photo to complete your profile.");
-      return;
-    }
 
     setSavingCompany(true);
     setErrorMsg(null);
@@ -218,13 +224,7 @@ export default function RecruiterProfilePage() {
         try {
           localStorage.setItem(key, JSON.stringify(dataObj));
         } catch (err) {
-          logger.warn("LocalStorage setItem failed (quota exceeded), attempting lightweight payload without heavy avatar", err);
-          try {
-            const lightweightObj = { ...dataObj, recruiterAvatar: "" };
-            localStorage.setItem(key, JSON.stringify(lightweightObj));
-          } catch (err2) {
-            logger.error("LocalStorage setItem failed completely", err2);
-          }
+          logger.warn("LocalStorage setItem failed", err);
         }
       };
 
@@ -232,7 +232,7 @@ export default function RecruiterProfilePage() {
       safeSetLocalStorage(savedProfileKey, activeSpecs);
       safeSetLocalStorage("smarthire_active_recruiter_profile", activeSpecs);
 
-      // 1. Update Supabase Auth metadata (keep JWT cookie lightweight to prevent 494 REQUEST_HEADER_TOO_LARGE)
+      // 1. Update Supabase Auth metadata & identity table
       try {
         await supabase.auth.updateUser({
           data: {
@@ -240,7 +240,7 @@ export default function RecruiterProfilePage() {
             last_name: recruiterLastName.trim(),
             full_name: `${recruiterFirstName.trim()} ${recruiterLastName.trim()}`.trim(),
             company_name: companyName.trim(),
-            avatar_url: null,
+            avatar_url: recruiterAvatar || null,
           }
         });
 
@@ -298,20 +298,47 @@ export default function RecruiterProfilePage() {
         }
       }
 
-      // 3. Upsert Recruiter record linking user to company
+      // 3. Update or insert Recruiter record as SINGLE SOURCE OF TRUTH in database
       if (activeCompanyId) {
-        const { error: recErr } = await supabase
+        const { data: existingRec } = await supabase
           .schema("organization")
           .from("recruiters")
-          .upsert({
-            user_id: authUser.id,
-            company_id: activeCompanyId,
-            role: "recruiter",
-            title: recruiterTitle.trim() || "Talent Acquisition Specialist",
-          }, { onConflict: "user_id" });
+          .select("id")
+          .eq("user_id", authUser.id)
+          .maybeSingle();
 
-        if (recErr) {
-          logger.error("Error updating recruiter record", recErr);
+        const recruiterPayload = {
+          user_id: authUser.id,
+          company_id: activeCompanyId,
+          role: "recruiter",
+          first_name: recruiterFirstName.trim(),
+          last_name: recruiterLastName.trim(),
+          email: recruiterEmail.trim(),
+          phone: recruiterPhone.trim(),
+          title: recruiterTitle.trim() || "Talent Acquisition Specialist",
+          avatar_url: recruiterAvatar || null,
+          profile_completed: true,
+        };
+
+        if (existingRec?.id) {
+          const { error: recErr } = await supabase
+            .schema("organization")
+            .from("recruiters")
+            .update(recruiterPayload)
+            .eq("id", existingRec.id);
+
+          if (recErr) {
+            logger.error("Error updating recruiter record", recErr);
+          }
+        } else {
+          const { error: recErr } = await supabase
+            .schema("organization")
+            .from("recruiters")
+            .insert(recruiterPayload);
+
+          if (recErr) {
+            logger.error("Error creating recruiter record", recErr);
+          }
         }
       }
 

@@ -1,48 +1,100 @@
 "use client";
 
 import * as React from "react";
-import { Button } from "@smarthire/ui";
-import { Loader2, Building, CheckCircle, Ban } from "lucide-react";
+import {
+  Building2,
+  Search,
+  Loader2,
+  Briefcase,
+  Users,
+  FileSpreadsheet,
+  Globe,
+  MapPin,
+  Eye,
+  X,
+} from "lucide-react";
 import { logger } from "@smarthire/logger";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/utils/supabase/client";
 
-const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
-const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
-
-const orgClient = createBrowserClient(REAL_URL, REAL_KEY, { db: { schema: "organization" } });
-
-interface CompanyRow {
+interface CompanyItem {
   id: string;
   name: string;
-  industry?: string;
-  country?: string;
-  website?: string;
+  domain?: string | null;
+  industry?: string | null;
+  company_size?: string | null;
+  location?: string | null;
   created_at: string;
-  status?: string; // suspended or active
+  recruitersCount: number;
+  jobsCount: number;
+  appsCount: number;
 }
 
 export default function AdminCompaniesPage() {
-  const [companies, setCompanies] = React.useState<CompanyRow[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [companies, setCompanies] = React.useState<CompanyItem[]>([]);
+  const [search, setSearch] = React.useState("");
+
+  // Modal State
+  const [selectedCompany, setSelectedCompany] = React.useState<CompanyItem | null>(null);
+  const [companyRecruiters, setCompanyRecruiters] = React.useState<any[]>([]);
+  const [companyJobs, setCompanyJobs] = React.useState<any[]>([]);
+  const [loadingDetails, setLoadingDetails] = React.useState(false);
 
   const fetchCompanies = React.useCallback(async () => {
     setLoading(true);
+    const supabase = createClient();
     try {
-      const { data, error } = await orgClient
+      const { data: compData, error: compErr } = await supabase
+        .schema("organization")
         .from("companies")
-        .select("id, name, industry, country, website, created_at");
+        .select("id, name, domain, industry, company_size, location, created_at")
+        .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (compErr) throw compErr;
 
-      // Add a client-side simulated status toggle
-      const mapped = (data || []).map((c) => ({
+      const { data: recData } = await supabase
+        .schema("organization")
+        .from("recruiters")
+        .select("company_id");
+
+      const { data: jobsData } = await supabase
+        .schema("job")
+        .from("jobs")
+        .select("id, company_id");
+
+      const { data: appsData } = await supabase
+        .schema("application")
+        .from("applications")
+        .select("id, job_id");
+
+      const recCounts: Record<string, number> = {};
+      (recData || []).forEach((r) => { if (r.company_id) recCounts[r.company_id] = (recCounts[r.company_id] || 0) + 1; });
+
+      const jobCounts: Record<string, number> = {};
+      const jobCompanyMap: Record<string, string> = {};
+      (jobsData || []).forEach((j) => {
+        if (j.company_id) {
+          jobCounts[j.company_id] = (jobCounts[j.company_id] || 0) + 1;
+          jobCompanyMap[j.id] = j.company_id;
+        }
+      });
+
+      const appCounts: Record<string, number> = {};
+      (appsData || []).forEach((a) => {
+        const cId = jobCompanyMap[a.job_id];
+        if (cId) appCounts[cId] = (appCounts[cId] || 0) + 1;
+      });
+
+      const list: CompanyItem[] = (compData || []).map((c) => ({
         ...c,
-        status: localStorage.getItem(`company_suspended_${c.id}`) === "true" ? "suspended" : "active",
+        recruitersCount: recCounts[c.id] || 0,
+        jobsCount: jobCounts[c.id] || 0,
+        appsCount: appCounts[c.id] || 0,
       }));
 
-      setCompanies(mapped);
+      setCompanies(list);
     } catch (err) {
-      logger.error("Failed to load companies listing", err);
+      logger.error("Failed to load companies for admin", err);
     } finally {
       setLoading(false);
     }
@@ -52,115 +104,218 @@ export default function AdminCompaniesPage() {
     fetchCompanies();
   }, [fetchCompanies]);
 
-  const toggleSuspension = (id: string, currentStatus?: string) => {
-    const isSuspended = currentStatus === "suspended";
-    const nextStatus = isSuspended ? "active" : "suspended";
+  const handleOpenCompanyModal = async (comp: CompanyItem) => {
+    setSelectedCompany(comp);
+    setLoadingDetails(true);
+    const supabase = createClient();
 
-    localStorage.setItem(`company_suspended_${id}`, isSuspended ? "false" : "true");
+    try {
+      const { data: recs } = await supabase
+        .schema("organization")
+        .from("recruiters")
+        .select("id, first_name, last_name, email, title")
+        .eq("company_id", comp.id);
 
-    setCompanies((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: nextStatus } : c))
-    );
-    logger.info(`Company ${id} suspension status toggled to: ${nextStatus}`);
+      const { data: jobs } = await supabase
+        .schema("job")
+        .from("jobs")
+        .select("id, title, status, category, created_at")
+        .eq("company_id", comp.id);
+
+      setCompanyRecruiters(recs || []);
+      setCompanyJobs(jobs || []);
+    } catch (err) {
+      logger.error("Failed to load company details", err);
+    } finally {
+      setLoadingDetails(false);
+    }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-      </div>
-    );
-  }
+  const filteredCompanies = companies.filter((c) => {
+    const q = search.toLowerCase().trim();
+    if (!q) return true;
+    return c.name.toLowerCase().includes(q) || (c.industry || "").toLowerCase().includes(q) || (c.domain || "").toLowerCase().includes(q);
+  });
 
   return (
     <div className="space-y-6 text-left animate-in fade-in duration-200">
       {/* Header */}
-      <div>
-        <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider block">
-          Platform Operations Console
-        </span>
-        <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-150 mt-1">
-          Registered Companies
-        </h1>
-        <p className="text-sm text-zinc-555 dark:text-zinc-400 mt-1">
-          Audit tenant organizations, manage billing subscription structures, or toggle workspace locks.
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 pb-5">
+        <div>
+          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block">
+            Platform Multi-Tenant Organizations
+          </span>
+          <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900 mt-0.5">
+            Companies Overview
+          </h1>
+          <p className="text-xs text-zinc-500 mt-1 font-medium">
+            Inspect corporate clients, active team recruiter accounts, and hiring pipelines.
+          </p>
+        </div>
+
+        <div className="relative w-full md:w-72">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search company by name, industry..."
+            className="w-full pl-9 pr-4 py-2 rounded-xl border border-zinc-200 bg-white text-xs font-medium text-zinc-900 focus:border-blue-600 focus:outline-none shadow-2xs"
+          />
+        </div>
       </div>
 
       {/* Companies Table */}
-      {companies.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-200 p-8 text-center text-zinc-500 italic text-sm">
-          No registered companies found on the tenant platform.
+      {loading ? (
+        <div className="flex justify-center items-center py-24">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
         </div>
       ) : (
-        <div className="w-full overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm">
-          <table className="w-full border-collapse text-left text-xs">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 font-semibold uppercase tracking-wider">
-              <tr>
-                <th className="p-4">Company Name</th>
-                <th className="p-4">Industry</th>
-                <th className="p-4">Office Region</th>
-                <th className="p-4">Website</th>
-                <th className="p-4">Registered Date</th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 text-zinc-700">
-              {companies.map((c) => (
-                <tr key={c.id} className="hover:bg-zinc-900/10 transition-colors">
-                  <td className="p-4 font-bold text-zinc-900">
-                    <div className="flex items-center gap-2">
-                      <Building className="h-4 w-4 text-zinc-500" />
-                      <span>{c.name}</span>
-                    </div>
-                  </td>
-                  <td className="p-4 capitalize text-zinc-650 font-medium">
-                    {c.industry || "Technology"}
-                  </td>
-                  <td className="p-4 text-zinc-650">
-                    {c.country || "United States"}
-                  </td>
-                  <td className="p-4">
-                    {c.website ? (
-                      <a
-                        href={c.website}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-blue-500 hover:underline"
-                      >
-                        {c.website}
-                      </a>
-                    ) : (
-                      <span className="text-zinc-550">--</span>
-                    )}
-                  </td>
-                  <td className="p-4 text-zinc-500">
-                    {new Date(c.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="p-4 text-right">
-                    <Button
-                      onClick={() => toggleSuspension(c.id, c.status)}
-                      className={`h-8 px-3 text-[10px] font-bold rounded-lg ${
-                        c.status === "suspended"
-                          ? "bg-emerald-600 text-white hover:bg-emerald-500"
-                          : "bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-600/20"
-                      }`}
-                    >
-                      {c.status === "suspended" ? (
-                        <span className="flex items-center gap-1">
-                          <CheckCircle className="h-3 w-3" /> Reactivate
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1">
-                          <Ban className="h-3 w-3" /> Suspend
-                        </span>
-                      )}
-                    </Button>
-                  </td>
+        <div className="rounded-2xl border border-zinc-200 bg-white shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">
+                  <th className="py-3 px-4">Company Name</th>
+                  <th className="py-3 px-4">Domain / Web</th>
+                  <th className="py-3 px-4">Industry</th>
+                  <th className="py-3 px-4">Team Size</th>
+                  <th className="py-3 px-4">Recruiters</th>
+                  <th className="py-3 px-4">Active Jobs</th>
+                  <th className="py-3 px-4">Total Applications</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 font-medium">
+                {filteredCompanies.map((comp) => (
+                  <tr key={comp.id} className="hover:bg-zinc-50/80 transition-colors">
+                    <td className="py-3.5 px-4 font-extrabold text-zinc-900 flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-xs border border-blue-100 shrink-0">
+                        <Building2 className="h-3.5 w-3.5" />
+                      </div>
+                      {comp.name}
+                    </td>
+                    <td className="py-3.5 px-4 text-zinc-600 font-mono text-[11px]">{comp.domain || "—"}</td>
+                    <td className="py-3.5 px-4 text-zinc-600">{comp.industry || "Software & Tech"}</td>
+                    <td className="py-3.5 px-4 text-zinc-600">{comp.company_size || "1-10"}</td>
+                    <td className="py-3.5 px-4 font-bold text-violet-700">{comp.recruitersCount} Members</td>
+                    <td className="py-3.5 px-4 font-bold text-blue-700">{comp.jobsCount} Listings</td>
+                    <td className="py-3.5 px-4 font-bold text-emerald-700">{comp.appsCount} Applicants</td>
+                    <td className="py-3.5 px-4 text-right">
+                      <button
+                        onClick={() => handleOpenCompanyModal(comp)}
+                        className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-[11px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> Detailed Report
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {filteredCompanies.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-zinc-400 text-xs italic font-medium">
+                      No companies found matching filter criteria.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Company Detailed Modal */}
+      {selectedCompany && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-3xl bg-white border border-zinc-200 rounded-2xl shadow-2xl p-6 space-y-6 text-left max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-zinc-200 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-blue-600 text-white font-black text-xl flex items-center justify-center">
+                  <Building2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-zinc-900">{selectedCompany.name}</h3>
+                  <p className="text-xs text-zinc-500 font-medium">
+                    {selectedCompany.domain || "No domain"} • {selectedCompany.industry || "Technology"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedCompany(null)}
+                className="text-zinc-400 hover:text-zinc-700 h-8 w-8 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Details Grid */}
+            {loadingDetails ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Team Recruiters */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-extrabold text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="h-4 w-4 text-violet-600" /> Team Recruiters ({companyRecruiters.length})
+                  </h4>
+                  {companyRecruiters.length > 0 ? (
+                    <div className="space-y-2">
+                      {companyRecruiters.map((r) => (
+                        <div key={r.id} className="p-3 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-xs text-zinc-900">{r.first_name || "Recruiter"} {r.last_name || ""}</p>
+                            <p className="text-[10px] text-zinc-500 font-mono">{r.email}</p>
+                          </div>
+                          <span className="text-[9px] font-bold text-zinc-600 bg-zinc-200 px-2 py-0.5 rounded-md">
+                            {r.title || "Recruiter"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-400 italic">No recruiters assigned.</p>
+                  )}
+                </div>
+
+                {/* Published Jobs */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-extrabold text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Briefcase className="h-4 w-4 text-blue-600" /> Published Openings ({companyJobs.length})
+                  </h4>
+                  {companyJobs.length > 0 ? (
+                    <div className="space-y-2">
+                      {companyJobs.map((j) => (
+                        <div key={j.id} className="p-3 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-xs text-zinc-900">{j.title}</p>
+                            <p className="text-[10px] text-zinc-500">{j.category || "Engineering"}</p>
+                          </div>
+                          <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            {j.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-400 italic">No job openings created.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-zinc-200 flex justify-end">
+              <button
+                onClick={() => setSelectedCompany(null)}
+                className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Close Report
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

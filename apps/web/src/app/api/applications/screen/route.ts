@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAppClient } from "@/utils/supabase/application";
-import { AIService } from "@/services/ai";
+import { ATSEngine } from "@/services/ats/ats-engine";
 import { logger } from "@smarthire/logger";
 
 export async function POST(request: NextRequest) {
@@ -43,34 +43,25 @@ export async function POST(request: NextRequest) {
 
     const candidateIds = apps.map((a) => a.candidate_id);
 
-    // 3. Fetch candidate profiles from candidate schema
-    const { data: cands, error: candsErr } = await supabase
+    // 3. Fetch candidate profiles
+    const { data: cands } = await supabase
       .schema("candidate")
       .from("candidates")
       .select("id, tags, summary, headline")
       .in("id", candidateIds);
 
-    if (candsErr) {
-      logger.error("Failed to fetch candidate profiles for screening", candsErr);
-      return NextResponse.json({ error: "Failed to fetch candidate profiles" }, { status: 500 });
-    }
-
-    // 4. Fetch resumes for candidates
-    const { data: resumes, error: resumesErr } = await supabase
+    // 4. Fetch candidate resumes
+    const { data: resumes } = await supabase
       .schema("candidate")
       .from("resumes")
       .select("candidate_id, parsed_text")
       .in("candidate_id", candidateIds);
 
-    if (resumesErr) {
-      logger.warn("Failed to fetch resumes, proceeding with profile summaries", resumesErr);
-    }
-
     // 5. Fetch job details
     const { data: job, error: jobErr } = await supabase
       .schema("job")
       .from("jobs")
-      .select("title, description")
+      .select("title, description, category")
       .eq("id", jobId)
       .single();
 
@@ -79,40 +70,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Job posting not found" }, { status: 404 });
     }
 
-    // 6. Map to candidate profiles for ranker input
-    const candidatesPayload = apps.map((app) => {
+    const jobDescriptionText = `${job.title}\nCategory: ${job.category || ""}\n${job.description || ""}`;
+
+    // 6. Run Extracted ATS Core Engine for each application
+    let processedCount = 0;
+    for (const app of apps) {
       const cand = cands?.find((c) => c.id === app.candidate_id);
       const res = resumes?.find((r) => r.candidate_id === app.candidate_id);
-      return {
-        candidateId: app.id, // Rank the application ID directly
-        skills: cand?.tags || [],
-        totalExperienceYears: 3, // Mock default experience
-        educationLevel: "bachelor",
-        resumeContent: res?.parsed_text || cand?.summary || cand?.headline || "Applicant profile",
-      };
-    });
 
-    const requiredSkills = ["React", "TypeScript", "JavaScript", "HTML", "CSS", "Node.js", "SQL", "Git"];
+      const resumeContent =
+        res?.parsed_text ||
+        `${cand?.headline || ""} ${cand?.summary || ""} Skills: ${(cand?.tags || []).join(", ")}`.trim() ||
+        "Applicant Profile Resume Data";
 
-    // 7. Run AI Ranker
-    const rankedEntries = await AIService.rankCandidates({
-      jobDescription: job.description || job.title || "",
-      requiredSkills,
-      minExperienceYears: 2,
-      candidates: candidatesPayload,
-    });
+      const result = ATSEngine.evaluate(resumeContent, jobDescriptionText);
 
-    // 8. Update scores in applications table (both legacy score and new screening_score)
-    for (const entry of rankedEntries) {
-      const scoreOutOf10 = Math.round((entry.score / 10) * 10) / 10; // e.g. 8.5
+      // Score out of 10 for legacy score column, and percentage for screening_score
+      const scoreOutOf10 = Math.round((result.atsScore / 10) * 10) / 10;
+
       await supabase
         .from("applications")
-        .update({ score: scoreOutOf10, screening_score: scoreOutOf10 })
-        .eq("id", entry.candidateId);
+        .update({
+          score: scoreOutOf10,
+          screening_score: result.atsScore,
+        })
+        .eq("id", app.id);
+
+      processedCount++;
     }
 
-    logger.info(`[ATS Screening] Completed screening for job ${jobId}. Screened ${rankedEntries.length} candidates.`);
-    return NextResponse.json({ success: true, count: rankedEntries.length });
+    logger.info(`[ATS Screening] Completed screening for job ${jobId}. Screened ${processedCount} candidates using ATS Core Engine.`);
+    return NextResponse.json({ success: true, count: processedCount });
   } catch (err: unknown) {
     logger.error("API error in applications screen route", err);
     const message = err instanceof Error ? err.message : String(err);

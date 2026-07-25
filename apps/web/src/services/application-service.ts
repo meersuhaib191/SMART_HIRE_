@@ -34,6 +34,29 @@ export const applicationService = {
       throw new Error(JSON.stringify(result.error.flatten()));
     }
 
+    const { jobId } = result.data;
+
+    // 1. Verify job is published and application deadline has not passed
+    const { createBrowserClient } = await import("@supabase/ssr");
+    const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
+    const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
+    const jobDb = createBrowserClient(REAL_URL, REAL_KEY, { db: { schema: "job" } });
+
+    const { data: targetJob } = await jobDb
+      .from("jobs")
+      .select("id, title, status, application_deadline")
+      .eq("id", jobId)
+      .maybeSingle();
+
+    if (targetJob) {
+      if (targetJob.status !== "published") {
+        throw new Error("Applications for this job are currently not open.");
+      }
+      if (targetJob.application_deadline && new Date() > new Date(targetJob.application_deadline)) {
+        throw new Error("Applications for this job are closed.");
+      }
+    }
+
     const app = await applicationRepository.insertApplication(result.data);
 
     // Initial Status History log
@@ -47,6 +70,24 @@ export const applicationService = {
       });
     } catch (histErr) {
       logger.warn("Status history logging skipped", histErr);
+    }
+
+    // Candidate Notification for Application Submitted
+    if (userId) {
+      try {
+        const { notificationService } = await import("@/services/notification-service");
+        const jobTitle = targetJob?.title || "Job Position";
+        await notificationService.createNotification({
+          userId,
+          type: "APPLICATION_SUBMITTED",
+          subject: "Application Submitted",
+          body: `Your application for ${jobTitle} has been submitted successfully.`,
+          metadata: { applicationId: app.id, jobId: app.job_id },
+          idempotencyKey: `notif_app_sub_${app.id}`,
+        });
+      } catch (notifErr) {
+        logger.warn("Application submission notification skipped", notifErr);
+      }
     }
 
     // Publish Event

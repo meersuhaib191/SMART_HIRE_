@@ -105,6 +105,8 @@ export const jobRepository = {
         benefits: job.benefits,
         mcq_assessment_id: job.mcqAssessmentId ?? null,
         coding_assessment_id: job.codingAssessmentId ?? null,
+        application_deadline: (job as any).applicationDeadline || (job as any).application_deadline || null,
+        published_at: (job as any).publishedAt || (job as any).published_at || (job.status === "published" ? new Date().toISOString() : null),
       })
       .select()
       .maybeSingle();
@@ -138,6 +140,8 @@ export const jobRepository = {
         experience_level: job.experienceLevel,
         category: job.category,
         benefits: job.benefits,
+        application_deadline: (job as any).applicationDeadline !== undefined ? (job as any).applicationDeadline : undefined,
+        published_at: job.status === "published" ? now : undefined,
         updated_at: now,
       })
       .eq("id", jobId)

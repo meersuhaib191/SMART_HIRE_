@@ -64,106 +64,90 @@ export function Header() {
       setNotifications([]);
       return;
     }
+    const fetchLiveNotifications = async () => {
+      try {
+        const res = await fetch("/api/notifications/in-app");
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+          const list: NotificationItem[] = json.data.map((item: any) => {
+            const timeAgo = item.created_at
+              ? `${Math.max(1, Math.round((Date.now() - new Date(item.created_at).getTime()) / 60000))}m ago`
+              : "Just now";
 
-    const storageKey = `smarthire_user_notifs_${user.id}`;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let savedNotifs: Array<any> = [];
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) savedNotifs = JSON.parse(raw);
-    } catch {}
+            let targetLink = user.role === "candidate" ? "/candidate/applications" : "/recruiter/dashboard";
+            if (item.metadata?.applicationId) {
+              targetLink = user.role === "candidate" ? "/candidate/applications" : "/recruiter/pipeline";
+            }
 
-    if (savedNotifs && savedNotifs.length > 0) {
-      setNotifications(savedNotifs);
-    } else {
-      const userFirstName = user.firstName || "User";
-      const isCandidate = user.role === "candidate";
-      const isRecruiter = user.role === "recruiter" || user.role === "company-admin";
+            return {
+              id: item.id,
+              title: item.subject || "Notification",
+              desc: item.body || "",
+              time: timeAgo,
+              unread: !item.is_read,
+              link: targetLink,
+            };
+          });
+          setNotifications(list);
+          return;
+        }
+      } catch (err) {
+        console.error("Failed to load live in-app notifications in Header", err);
+      }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let initial: Array<any> = [];
+      // Fallback local notifications
+      const storageKey = `smarthire_user_notifs_${user.id}`;
+      try {
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+          setNotifications(JSON.parse(stored));
+          return;
+        }
+      } catch {}
 
-      if (isCandidate) {
+      let initial: NotificationItem[] = [];
+      if (user.role === "candidate") {
         initial = [
           {
             id: `n1_${user.id}`,
-            title: `🎉 Welcome ${userFirstName}!`,
-            desc: "Your candidate profile is active. Browse open positions and apply to hiring pipelines.",
-            time: "10m ago",
+            title: "🎉 SmartHire Candidate Dashboard Active",
+            desc: "Explore top software positions and complete AI evaluations.",
+            time: "5m ago",
             unread: true,
             link: "/candidate/jobs",
           },
-          {
-            id: `n2_${user.id}`,
-            title: "📋 Resume Hub Ready",
-            desc: "Upload your resume in the Resume Hub for automated credential parsing.",
-            time: "30m ago",
-            unread: true,
-            link: "/candidate/resume",
-          },
-          {
-            id: `n3_${user.id}`,
-            title: "🗓️ Technical Interview Scheduling",
-            desc: "View active interview invitations and practice rooms.",
-            time: "2h ago",
-            unread: false,
-            link: "/candidate/interviews",
-          },
         ];
-      } else if (isRecruiter) {
+      } else if (user.role === "recruiter") {
         initial = [
           {
             id: `n1_${user.id}`,
-            title: `🚀 Recruiter Workspace Ready`,
-            desc: `Recruiter workspace configured for ${userFirstName}. Manage job openings and candidate pipelines.`,
-            time: "5m ago",
-            unread: true,
-            link: "/recruiter/jobs",
-          },
-          {
-            id: `n2_${user.id}`,
-            title: "📥 Candidate Applications Received",
-            desc: "New applicant submissions received across published enterprise positions.",
-            time: "25m ago",
+            title: "🎯 SmartHire Recruiter Workspace Ready",
+            desc: "Manage pipeline candidates and screening workflows.",
+            time: "10m ago",
             unread: true,
             link: "/recruiter/pipeline",
           },
-          {
-            id: `n3_${user.id}`,
-            title: "⚡ MCQ & Coding Screening Tests",
-            desc: "Automated test templates active for candidate evaluation.",
-            time: "1h ago",
-            unread: false,
-            link: "/recruiter/candidates",
-          },
-        ];
-      } else {
-        initial = [
-          {
-            id: `n1_${user.id}`,
-            title: "System Admin Overview",
-            desc: "System metrics, user roles, and platform health active.",
-            time: "1m ago",
-            unread: true,
-            link: "/admin/system",
-          },
         ];
       }
-
       setNotifications(initial);
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(initial));
-      } catch {}
-    }
+    };
+
+    fetchLiveNotifications();
   }, [user]);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
-  const markAllRead = () => {
+  const markAllRead = async () => {
     if (!user) return;
     const updated = notifications.map((n) => ({ ...n, unread: false }));
     setNotifications(updated);
     try {
+      await fetch("/api/notifications/in-app", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAll: true }),
+      });
       localStorage.setItem(`smarthire_user_notifs_${user.id}`, JSON.stringify(updated));
     } catch {}
   };
@@ -344,9 +328,13 @@ export function Header() {
             onClick={() => setProfileOpen((o) => !o)}
             className="flex items-center gap-2 rounded-[12px] px-2.5 py-1.5 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
           >
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0071E3] text-white text-[11px] font-bold">
-              {firstLetter}
-            </div>
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt={displayName} className="h-7 w-7 rounded-full object-cover border border-zinc-200" />
+            ) : (
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0071E3] text-white text-[11px] font-bold">
+                {firstLetter}
+              </div>
+            )}
             <span className="hidden font-medium sm:block truncate max-w-[100px]">{displayName}</span>
             <ChevronDown
               className={`h-3.5 w-3.5 text-[#6E6E73] transition-transform duration-150 ${

@@ -18,6 +18,7 @@ import {
 import { Button } from "@smarthire/ui";
 import { logger } from "@smarthire/logger";
 import { createBrowserClient } from "@supabase/ssr";
+import { AtsCalculatorCard } from "@/components/dashboard/AtsCalculatorCard";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -243,6 +244,9 @@ export default function CandidateDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left column tables */}
         <div className="lg:col-span-8 space-y-6">
+          {/* ATS Resume & JD Calculator Tool */}
+          <AtsCalculatorCard />
+
           {/* Recent Applications */}
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 space-y-4 shadow-sm">
             <div className="flex justify-between items-center border-b border-zinc-100 pb-3">

@@ -294,6 +294,29 @@ export default function JobsPage() {
         })}
       </div>
 
+      {/* Status Lifecycle Filter Tabs */}
+      <div className="flex items-center gap-2 border-b border-zinc-200 pb-3">
+        <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider mr-2">Lifecycle Status:</span>
+        {[
+          { label: `All Jobs (${stats.total})`, val: "" },
+          { label: `Drafts (${stats.draft})`, val: "draft" },
+          { label: `Published (${stats.open})`, val: "published" },
+          { label: `Closed (${stats.closed})`, val: "closed" },
+        ].map((tab) => (
+          <button
+            key={tab.val}
+            onClick={() => setStatus(tab.val)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              status === tab.val
+                ? "bg-zinc-900 text-white shadow-sm"
+                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Search and Filters Drawer */}
       <div className="pt-1">
         <JobFilters

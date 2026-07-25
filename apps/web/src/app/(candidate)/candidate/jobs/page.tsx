@@ -35,6 +35,7 @@ interface JobListing {
   salary_max?: number;
   description?: string;
   created_at: string;
+  application_deadline?: string | null;
   company_name?: string;
 }
 
@@ -71,7 +72,7 @@ export default function CandidateJobsSearchPage() {
           supabase
             .schema("job")
             .from("jobs")
-            .select("id, company_id, title, category, location, type, experience_level, salary_min, salary_max, description, created_at")
+            .select("id, company_id, title, category, location, type, experience_level, salary_min, salary_max, description, created_at, application_deadline")
             .eq("status", "published")
             .is("deleted_at", null)
             .order("created_at", { ascending: false }),
@@ -99,7 +100,8 @@ export default function CandidateJobsSearchPage() {
           salary_max: j.salary_max ? Number(j.salary_max) : undefined,
           description: j.description,
           created_at: j.created_at,
-          company_name: companyMap.get(j.company_id) || undefined,
+          application_deadline: j.application_deadline,
+          company_name: j.company_id ? companyMap.get(j.company_id) : undefined,
         }));
 
         setJobs(mappedJobs);
@@ -404,13 +406,27 @@ export default function CandidateJobsSearchPage() {
 
               {/* Footer Action */}
               <div className="pt-3 border-t border-zinc-100 flex items-center justify-between">
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-700 uppercase tracking-wider bg-zinc-100 px-2.5 py-1 rounded">
-                  <Briefcase className="h-3 w-3 text-zinc-500" />
-                  {job.type}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-700 uppercase tracking-wider bg-zinc-100 px-2.5 py-1 rounded">
+                    <Briefcase className="h-3 w-3 text-zinc-500" />
+                    {job.type}
+                  </span>
+
+                  {job.application_deadline && (() => {
+                    const isClosed = new Date() > new Date(job.application_deadline);
+                    const daysRemaining = Math.max(0, Math.ceil((new Date(job.application_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                    return (
+                      <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
+                        isClosed ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-800 border-amber-200"
+                      }`}>
+                        {isClosed ? "Applications Closed" : `${daysRemaining} days remaining`}
+                      </span>
+                    );
+                  })()}
+                </div>
 
                 <Link href={`/candidate/jobs/${job.id}`}>
-                  <Button size="sm" className="text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
+                  <Button size="sm" className="text-xs font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer">
                     View Job Details
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Button>

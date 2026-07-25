@@ -1,52 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createNotificationClient } from "@/utils/supabase/notification";
-import { NotificationService } from "@/services/notification";
+import { createClient } from "@/utils/supabase/server";
+import { notificationService } from "@/services/notification-service";
 import { logger } from "@smarthire/logger";
 
+export const dynamic = "force-dynamic";
+
 /**
- * GET /api/notifications/in-app — List in-app notifications for the authenticated user
- * Query params: isRead (true|false), limit (default 20), offset (default 0)
+ * GET: Fetch in-app notifications for authenticated candidate user
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createNotificationClient();
+    const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const query = Object.fromEntries(searchParams.entries());
-
-    logger.info(`[API] GET /api/notifications/in-app for user ${user.id}`);
-    const result = await NotificationService.listInAppNotifications(user.id, query);
-
-    return NextResponse.json({ data: result.data, total: result.total });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.error("[API] list in-app notifications error", err);
-    return NextResponse.json({ error: "Failed to fetch notifications", message }, { status: 500 });
+    const notifications = await notificationService.getUserNotifications(user.id);
+    return NextResponse.json({ data: notifications });
+  } catch (err) {
+    logger.error("API error in GET /api/notifications/in-app", err);
+    return NextResponse.json({ error: "Failed to fetch notifications" }, { status: 500 });
   }
 }
 
-/** PATCH /api/notifications/in-app — Mark all in-app notifications as read */
-export async function PATCH() {
+/**
+ * POST: Mark single or all notifications as read
+ */
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createNotificationClient();
+    const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    logger.info(`[API] PATCH /api/notifications/in-app (mark all read) for user ${user.id}`);
-    await NotificationService.markAllAsRead(user.id);
+    const body = await request.json();
+    const { notificationId, markAll } = body;
 
-    return NextResponse.json({ success: true });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.error("[API] mark all read error", err);
-    return NextResponse.json({ error: "Failed to mark all as read", message }, { status: 500 });
+    if (markAll) {
+      const success = await notificationService.markAllAsRead(user.id);
+      return NextResponse.json({ success });
+    }
+
+    if (notificationId) {
+      const success = await notificationService.markAsRead(notificationId, user.id);
+      return NextResponse.json({ success });
+    }
+
+    return NextResponse.json({ error: "Missing notificationId or markAll parameter" }, { status: 400 });
+  } catch (err) {
+    logger.error("API error in POST /api/notifications/in-app", err);
+    return NextResponse.json({ error: "Failed to update notification state" }, { status: 500 });
   }
 }

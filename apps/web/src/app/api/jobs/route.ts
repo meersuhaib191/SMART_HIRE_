@@ -62,15 +62,33 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    logger.info(`API: Recruiter ${user.id} is creating a job posting (saving to Draft)`);
+    const targetStatus = body.status === "published" ? "published" : "draft";
 
-    // Enforce initial draft status for all newly posted jobs
-    const draftPayload = {
+    if (targetStatus === "published") {
+      const deadline = body.applicationDeadline || body.application_deadline;
+      if (!deadline) {
+        return NextResponse.json(
+          { error: "Validation error", message: "Application deadline is required to publish a job." },
+          { status: 400 }
+        );
+      }
+      if (new Date(deadline) <= new Date()) {
+        return NextResponse.json(
+          { error: "Validation error", message: "Application deadline must be a valid future date/time." },
+          { status: 400 }
+        );
+      }
+    }
+
+    logger.info(`API: Recruiter ${user.id} is creating a job posting with status: ${targetStatus}`);
+
+    const payload = {
       ...body,
-      status: "draft",
+      status: targetStatus,
+      published_at: targetStatus === "published" ? new Date().toISOString() : null,
     };
 
-    const jobRecord = await jobService.createJob(draftPayload);
+    const jobRecord = await jobService.createJob(payload);
     return NextResponse.json({ data: jobRecord }, { status: 201 });
   } catch (err: unknown) {
     logger.error("API error in jobs creation POST route", err);

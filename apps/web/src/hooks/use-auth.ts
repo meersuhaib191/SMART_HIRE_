@@ -33,24 +33,38 @@ export function useAuth() {
       let firstName = meta.first_name || meta.firstName || "";
       let lastName = meta.last_name || meta.lastName || "";
       let role = (meta.role as UserRole) || "candidate";
+      let avatarUrl = meta.avatar_url || "";
+      let profileCompleted = false;
 
-      // Check local recruiter profile specs if stored for this user
-      if (typeof window !== "undefined") {
-        try {
-          const savedKey = `smarthire_active_recruiter_profile_${sessionUser.id}`;
-          const raw = localStorage.getItem(savedKey) || localStorage.getItem("smarthire_active_recruiter_profile");
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed.recruiterFirstName) firstName = parsed.recruiterFirstName;
-            if (parsed.recruiterLastName) lastName = parsed.recruiterLastName;
-            role = "recruiter";
-          }
-        } catch {
-          // Ignore storage errors
-        }
+      // Special check: If user email contains admin or metadata role is admin/platform-admin
+      if (sessionUser.email && sessionUser.email.toLowerCase().includes("admin") && (role === "candidate" || !role)) {
+        role = "platform-admin";
       }
 
-      // Try database identity table lookup as secondary enrichment
+      // 1. Primary check: Query organization.recruiters database table for recruiter profile
+      try {
+        const { data: recData } = await supabase
+          .schema("organization")
+          .from("recruiters")
+          .select("first_name, last_name, avatar_url, role, profile_completed")
+          .eq("user_id", sessionUser.id)
+          .is("deleted_at", null)
+          .maybeSingle();
+
+        if (recData) {
+          if (role !== "platform-admin" && role !== "admin" && role !== "company-admin") {
+            role = (recData.role as UserRole) || "recruiter";
+          }
+          if (recData.first_name) firstName = recData.first_name;
+          if (recData.last_name) lastName = recData.last_name;
+          if (recData.avatar_url) avatarUrl = recData.avatar_url;
+          if (recData.profile_completed) profileCompleted = true;
+        }
+      } catch {
+        // Ignore DB query errors gracefully
+      }
+
+      // 2. Secondary check: Query identity.users database table
       try {
         const { data: dbUser } = await supabase
           .schema("identity")
@@ -60,12 +74,29 @@ export function useAuth() {
           .maybeSingle();
 
         if (dbUser) {
-          if (dbUser.first_name) firstName = dbUser.first_name;
-          if (dbUser.last_name) lastName = dbUser.last_name;
-          if (dbUser.role) role = dbUser.role as UserRole;
+          if (dbUser.first_name && !firstName) firstName = dbUser.first_name;
+          if (dbUser.last_name && !lastName) lastName = dbUser.last_name;
+          if (dbUser.role && role !== "platform-admin" && role !== "admin") role = dbUser.role as UserRole;
         }
       } catch {
         // Ignore DB query errors gracefully
+      }
+
+      // Check local recruiter profile specs fallback
+      if (typeof window !== "undefined" && !avatarUrl) {
+        try {
+          const savedKey = `smarthire_active_recruiter_profile_${sessionUser.id}`;
+          const raw = localStorage.getItem(savedKey) || localStorage.getItem("smarthire_active_recruiter_profile");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.recruiterFirstName && !firstName) firstName = parsed.recruiterFirstName;
+            if (parsed.recruiterLastName && !lastName) lastName = parsed.recruiterLastName;
+            if (parsed.recruiterAvatar) avatarUrl = parsed.recruiterAvatar;
+            if (role !== "admin" && role !== "platform-admin" && role !== "company-admin") role = "recruiter";
+          }
+        } catch {
+          // Ignore storage errors
+        }
       }
 
       // If first name is still empty, derive clean name from email
@@ -83,7 +114,9 @@ export function useAuth() {
         lastName: lastName || "",
         role: role || "candidate",
         createdAt: sessionUser.created_at,
-      };
+        avatarUrl,
+        profileCompleted,
+      } as any;
     };
 
     const loadSession = async () => {
@@ -106,6 +139,14 @@ export function useAuth() {
 
     loadSession();
 
+    const handleProfileUpdate = () => {
+      loadSession();
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("smarthire_recruiter_profile_updated", handleProfileUpdate);
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!active) return;
       if (session?.user) {
@@ -120,6 +161,9 @@ export function useAuth() {
     return () => {
       active = false;
       subscription.unsubscribe();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("smarthire_recruiter_profile_updated", handleProfileUpdate);
+      }
     };
   }, []);
 

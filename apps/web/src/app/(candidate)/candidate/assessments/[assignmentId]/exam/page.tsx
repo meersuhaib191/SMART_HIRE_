@@ -25,129 +25,6 @@ interface QuestionItem {
   options: QuestionOption[];
 }
 
-const DEFAULT_10_QUESTIONS: QuestionItem[] = [
-  {
-    id: "q-1",
-    questionText: "What is the primary operational requirement for executing core domain workflows and system architecture in production?",
-    questionType: "mcq",
-    points: 2,
-    options: [
-      { id: "opt-1", text: "Building scalable, maintainable production software and system workflows" },
-      { id: "opt-2", text: "Manual paper sorting without automated error logging" },
-      { id: "opt-3", text: "Static graphic asset generation only" },
-      { id: "opt-4", text: "Disabling automated database backups" },
-    ],
-  },
-  {
-    id: "q-2",
-    questionText: "Which data structure provides O(1) average time complexity for key-value lookups and insertion?",
-    questionType: "mcq",
-    points: 2,
-    options: [
-      { id: "opt-1", text: "Hash Table / Object Dictionary" },
-      { id: "opt-2", text: "Singly Linked List" },
-      { id: "opt-3", text: "Unbalanced Binary Search Tree" },
-      { id: "opt-4", text: "Linear Array Scan" },
-    ],
-  },
-  {
-    id: "q-3",
-    questionText: "In a high-concurrency distributed microservices system, how is high availability and fault tolerance primarily maintained?",
-    questionType: "mcq",
-    points: 2,
-    options: [
-      { id: "opt-1", text: "Redundant service instances with automated load balancing and health checks" },
-      { id: "opt-2", text: "Running a single unmonitored monolithic application server" },
-      { id: "opt-3", text: "Suppressing runtime exception logging" },
-      { id: "opt-4", text: "Manual server restarts during peak user traffic" },
-    ],
-  },
-  {
-    id: "q-4",
-    questionText: "What is the main objective of implementing automated CI/CD deployment pipelines in modern software engineering?",
-    questionType: "mcq",
-    points: 2,
-    options: [
-      { id: "opt-1", text: "Ensure automated code compilation, automated testing, and reliable software releases" },
-      { id: "opt-2", text: "Eliminate source code version control tracking" },
-      { id: "opt-3", text: "Reduce network bandwidth capacity" },
-      { id: "opt-4", text: "Manually edit production database tables" },
-    ],
-  },
-  {
-    id: "q-5",
-    questionText: "What is the optimal worst-case time complexity of Merge Sort when sorting an array of size N?",
-    questionType: "mcq",
-    points: 2,
-    options: [
-      { id: "opt-1", text: "O(N log N)" },
-      { id: "opt-2", text: "O(N^2)" },
-      { id: "opt-3", text: "O(N)" },
-      { id: "opt-4", text: "O(1)" },
-    ],
-  },
-  {
-    id: "q-6",
-    questionText: "Which HTTP status code indicates a successful client POST request resulting in a new resource creation?",
-    questionType: "mcq",
-    points: 2,
-    options: [
-      { id: "opt-1", text: "201 Created" },
-      { id: "opt-2", text: "200 OK" },
-      { id: "opt-3", text: "400 Bad Request" },
-      { id: "opt-4", text: "500 Internal Server Error" },
-    ],
-  },
-  {
-    id: "q-7",
-    questionText: "In relational database design, what is the primary purpose of a Foreign Key constraint?",
-    questionType: "mcq",
-    points: 2,
-    options: [
-      { id: "opt-1", text: "Enforce referential integrity between related columns of two tables" },
-      { id: "opt-2", text: "Encrypt stored text fields on disk" },
-      { id: "opt-3", text: "Automatically index full-text search columns" },
-      { id: "opt-4", text: "Compress table backup archives" },
-    ],
-  },
-  {
-    id: "q-8",
-    questionText: "What is the main latency benefit of deploying static assets to a global Content Delivery Network (CDN)?",
-    questionType: "mcq",
-    points: 2,
-    options: [
-      { id: "opt-1", text: "Serve static assets from edge locations physically closest to end users" },
-      { id: "opt-2", text: "Execute server-side database SQL queries" },
-      { id: "opt-3", text: "Generate backend user authentication JWT tokens" },
-      { id: "opt-4", text: "Compile TypeScript source files into WebAssembly" },
-    ],
-  },
-  {
-    id: "q-9",
-    questionText: "In RESTful API design, which HTTP method should be strictly idempotent when replacing an entire resource representation?",
-    questionType: "mcq",
-    points: 2,
-    options: [
-      { id: "opt-1", text: "PUT" },
-      { id: "opt-2", text: "POST" },
-      { id: "opt-3", text: "PATCH" },
-      { id: "opt-4", text: "CONNECT" },
-    ],
-  },
-  {
-    id: "q-10",
-    questionText: "Which software design pattern decouples an abstraction from its implementation so that the two can vary independently?",
-    questionType: "mcq",
-    points: 2,
-    options: [
-      { id: "opt-1", text: "Bridge Pattern" },
-      { id: "opt-2", text: "Singleton Pattern" },
-      { id: "opt-3", text: "Decorator Pattern" },
-      { id: "opt-4", text: "Factory Method Pattern" },
-    ],
-  },
-];
-
 const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"];
 
 export default function CandidateExamPortalPage() {
@@ -159,8 +36,8 @@ export default function CandidateExamPortalPage() {
 
   // Template and questions details
   const [title, setTitle] = React.useState("Technical Screening Assessment");
-  const [durationMinutes, setDurationMinutes] = React.useState(10); // 1 min per question = 10 mins
-  const [questions, setQuestions] = React.useState<QuestionItem[]>(DEFAULT_10_QUESTIONS);
+  const [durationMinutes, setDurationMinutes] = React.useState(10);
+  const [questions, setQuestions] = React.useState<QuestionItem[]>([]);
 
   // Active attempt details
   const [attemptId, setAttemptId] = React.useState<string | null>(null);
@@ -198,12 +75,13 @@ export default function CandidateExamPortalPage() {
 
         let targetAssessmentId: string | null = null;
         let realAssignmentId: string = assignmentId;
+        let schedStartAt: string | null = null;
 
         // 1. Fetch assignment details by ID
         const { data: assignment } = await supabase
           .schema("assessment")
           .from("assignments")
-          .select("id, assessment_id, candidate_id, status")
+          .select("id, assessment_id, candidate_id, status, scheduled_start_at, application_id")
           .eq("id", assignmentId)
           .maybeSingle();
 
@@ -213,6 +91,26 @@ export default function CandidateExamPortalPage() {
           }
           targetAssessmentId = assignment.assessment_id;
           realAssignmentId = assignment.id;
+          schedStartAt = assignment.scheduled_start_at || null;
+
+          if (!schedStartAt && assignment.application_id) {
+            const { data: appData } = await supabase
+              .schema("application")
+              .from("applications")
+              .select("job_id")
+              .eq("id", assignment.application_id)
+              .maybeSingle();
+
+            if (appData?.job_id) {
+              const { data: job } = await supabase
+                .schema("job")
+                .from("jobs")
+                .select("mcq_scheduled_start_at")
+                .eq("id", appData.job_id)
+                .maybeSingle();
+              if (job?.mcq_scheduled_start_at) schedStartAt = job.mcq_scheduled_start_at;
+            }
+          }
         } else {
           const { data: template } = await supabase
             .schema("assessment")
@@ -227,15 +125,27 @@ export default function CandidateExamPortalPage() {
             const { data: job } = await supabase
               .schema("job")
               .from("jobs")
-              .select("id, title, mcq_assessment_id, coding_assessment_id")
+              .select("id, title, mcq_assessment_id, coding_assessment_id, mcq_scheduled_start_at")
               .or(`mcq_assessment_id.eq.${assignmentId},coding_assessment_id.eq.${assignmentId}`)
               .maybeSingle();
 
             if (job) {
               targetAssessmentId = job.mcq_assessment_id || job.coding_assessment_id || null;
+              schedStartAt = job.mcq_scheduled_start_at || null;
               if (job.title) setTitle(`${job.title} - MCQ Screening Exam`);
             }
           }
+        }
+
+        // Schedule check: If MCQ round is unscheduled or scheduled in the future, block entry
+        if (!schedStartAt) {
+          setErrorMsg("MCQ Assessment Unscheduled: The recruiter has not scheduled this MCQ round yet. Please check back after scheduling.");
+          setLoading(false);
+          return;
+        } else if (new Date(schedStartAt) > new Date()) {
+          setErrorMsg(`MCQ Assessment Locked: This exam is scheduled for ${new Date(schedStartAt).toLocaleString([], { dateStyle: "long", timeStyle: "short" })}. Early entry is locked.`);
+          setLoading(false);
+          return;
         }
 
         if (targetAssessmentId) {
@@ -255,7 +165,7 @@ export default function CandidateExamPortalPage() {
           }
         }
 
-        // Fetch questions list
+        // Fetch questions list for this specific scheduled assessment
         let dbQuestions: any[] | null = null;
         if (targetAssessmentId) {
           const { data } = await supabase
@@ -266,58 +176,49 @@ export default function CandidateExamPortalPage() {
           dbQuestions = data;
         }
 
-        if (dbQuestions && dbQuestions.length >= 3) {
-          const mappedQ: QuestionItem[] = dbQuestions.map((q, idx) => {
-            let rawOpts: any[] = [];
-            if (q.options) {
-              if (Array.isArray(q.options)) {
-                rawOpts = q.options;
-              } else if (typeof q.options === "string") {
-                try {
-                  rawOpts = JSON.parse(q.options);
-                } catch {
-                  rawOpts = [];
-                }
+        if (!dbQuestions || dbQuestions.length === 0) {
+          setErrorMsg("This assessment has not been configured correctly. Please contact the recruiter.");
+          setLoading(false);
+          return;
+        }
+
+        const mappedQ: QuestionItem[] = dbQuestions.map((q, idx) => {
+          let rawOpts: any[] = [];
+          if (q.options) {
+            if (Array.isArray(q.options)) {
+              rawOpts = q.options;
+            } else if (typeof q.options === "string") {
+              try {
+                rawOpts = JSON.parse(q.options);
+              } catch {
+                rawOpts = [];
               }
             }
+          }
 
-            const optList: QuestionOption[] = rawOpts.map((opt: any, i: number) => {
-              if (typeof opt === "string") {
-                return { id: `opt-${i}`, text: opt };
-              }
-              return {
-                id: opt?.id || `opt-${i}`,
-                text: opt?.text || opt?.option || String(opt),
-              };
-            });
-
-            // Strip out any PDF template prefixes or numbers
-            let cleanText = (q.question_text || "")
-              .replace(/^\d+\.\s*\([^)]*PDF[^)]*\):\s*/gi, "")
-              .replace(/^\([^)]*PDF[^)]*\):\s*/gi, "")
-              .replace(/^Refer to Recruiter Uploaded.*?PDF.*?\n\n/gi, "")
-              .replace(/^Recruiter Uploaded Question Template PDF:?\s*/gi, "");
-
-            if (!cleanText || cleanText.length < 5) {
-              cleanText = DEFAULT_10_QUESTIONS[idx % DEFAULT_10_QUESTIONS.length].questionText;
+          const optList: QuestionOption[] = rawOpts.map((opt: any, i: number) => {
+            if (typeof opt === "string") {
+              return { id: `opt-${i}`, text: opt };
             }
-
             return {
-              id: q.id,
-              questionText: cleanText,
-              questionType: q.question_type || "mcq",
-              points: q.points || 2,
-              options: optList.length > 0 ? optList : DEFAULT_10_QUESTIONS[idx % DEFAULT_10_QUESTIONS.length].options,
+              id: opt?.id || `opt-${i}`,
+              text: opt?.text || opt?.option || String(opt),
             };
           });
 
-          setQuestions(mappedQ);
-          setDurationMinutes(Math.max(10, mappedQ.length * 1)); // 1 min per question
-        } else {
-          // Use default 10 professional domain questions (1 min per question = 10 mins)
-          setQuestions(DEFAULT_10_QUESTIONS);
-          setDurationMinutes(10);
-        }
+          const cleanText = (q.question_text || "").trim();
+
+          return {
+            id: q.id,
+            questionText: cleanText,
+            questionType: q.question_type || "mcq",
+            points: q.points || 1,
+            options: optList,
+          };
+        });
+
+        setQuestions(mappedQ);
+        setDurationMinutes(Math.max(10, mappedQ.length * 1));
 
         // Check for existing attempts
         const { data: existingAttempts } = await supabase

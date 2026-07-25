@@ -6,6 +6,7 @@ import { Loader2, Calendar, ArrowRight, Clock, Sparkles, Briefcase, Trophy, Chec
 import { Button } from "@smarthire/ui";
 import { logger } from "@smarthire/logger";
 import { createBrowserClient } from "@supabase/ssr";
+import { isTechDomain } from "@/utils/domain-utils";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -26,6 +27,7 @@ interface ActiveApplication {
   status: string;
   rejection_stage?: string | null;
   job_title: string;
+  job_category?: string | null;
   job_id: string;
   score?: number | null;
   assignment?: AssignmentDetails | null;
@@ -41,17 +43,19 @@ const STAGE_LABELS: Record<string, string> = {
   offered: "Offer",
 };
 
-function StageProgressBar({ currentStatus }: { currentStatus: string }) {
+function StageProgressBar({ currentStatus, isTech = true }: { currentStatus: string; isTech?: boolean }) {
+  const stages = isTech ? STAGE_ORDER : STAGE_ORDER.filter((s) => s !== "coding");
+
   const getActiveStageIndex = (status: string) => {
     switch (status) {
       case "applied": return 0;
       case "screening": return 1;
       case "mcq": return 2;
-      case "coding": return 3;
-      case "interview": return 4;
+      case "coding": return isTech ? 3 : 2;
+      case "interview": return isTech ? 4 : 3;
       case "offered":
       case "accepted":
-      case "hired": return 5;
+      case "hired": return isTech ? 5 : 4;
       default: return 0;
     }
   };
@@ -60,7 +64,7 @@ function StageProgressBar({ currentStatus }: { currentStatus: string }) {
 
   return (
     <div className="flex items-center gap-0 w-full mt-2">
-      {STAGE_ORDER.map((stage, i) => {
+      {stages.map((stage, i) => {
         const isCompleted = i < idx;
         const isCurrent = i === idx;
         return (
@@ -85,7 +89,7 @@ function StageProgressBar({ currentStatus }: { currentStatus: string }) {
                 {STAGE_LABELS[stage]}
               </span>
             </div>
-            {i < STAGE_ORDER.length - 1 && (
+            {i < stages.length - 1 && (
               <div
                 className={`h-0.5 flex-1 mb-4 rounded-full transition-all ${
                   i < idx ? "bg-emerald-400" : "bg-zinc-200"
@@ -151,14 +155,12 @@ export default function CandidateApplicationsPage() {
             .is("deleted_at", null)
             .order("created_at", { ascending: false });
 
-          if (error) throw error;
-
           if (apps && apps.length > 0) {
             const jobIds = apps.map((a) => a.job_id);
             const { data: jobs } = await supabase
               .schema("job")
               .from("jobs")
-              .select("id, title, mcq_scheduled_start_at, coding_scheduled_start_at")
+              .select("id, title, category, mcq_scheduled_start_at, coding_scheduled_start_at")
               .in("id", jobIds);
 
             const { data: assignments } = await supabase
@@ -200,6 +202,7 @@ export default function CandidateApplicationsPage() {
                 created_at: app.created_at,
                 status: app.status,
                 job_title: job ? job.title : "Hiring position",
+                job_category: job?.category || null,
                 job_id: app.job_id,
                 score: app.score,
                 assignment: assignmentDetails,
@@ -398,7 +401,7 @@ export default function CandidateApplicationsPage() {
                 </div>
               )}
 
-              {app.status === "coding" && (
+              {app.status === "coding" && isTechDomain(app.job_category, app.job_title) && (
                 <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -503,7 +506,7 @@ export default function CandidateApplicationsPage() {
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
                   Stage Progress Tracker
                 </span>
-                <StageProgressBar currentStatus={app.status} />
+                <StageProgressBar currentStatus={app.status} isTech={isTechDomain(app.job_category, app.job_title)} />
               </div>
             </div>
           </div>

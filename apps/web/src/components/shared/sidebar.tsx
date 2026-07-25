@@ -30,11 +30,12 @@ interface NavLink {
 /* ─── Data ───────────────────────────────────────────────────── */
 const adminLinks: NavLink[] = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+  { label: "Candidates", href: "/admin/candidates", icon: Users },
+  { label: "Recruiters", href: "/admin/recruiters", icon: Briefcase },
   { label: "Companies", href: "/admin/companies", icon: Building2 },
-  { label: "Users & Roles", href: "/admin/users", icon: Users },
-  { label: "Subscriptions", href: "/admin/subscriptions", icon: CreditCard },
-  { label: "Feature Flags", href: "/admin/feature-flags", icon: Flag },
-  { label: "System Health", href: "/admin/system", icon: Settings2 },
+  { label: "All Jobs", href: "/admin/jobs", icon: FileSpreadsheet },
+  { label: "Applications", href: "/admin/applications", icon: Layers },
+  { label: "Security & Admin", href: "/admin/security", icon: Settings2 },
 ];
 
 const recruiterLinks: NavLink[] = [

@@ -42,16 +42,12 @@ function LoginFormContent() {
 
   React.useEffect(() => {
     try {
-      const savedEmail = localStorage.getItem("smarthire_remembered_email");
-      const isRemembered = localStorage.getItem("smarthire_remember_me") === "true";
-      if (savedEmail && isRemembered) {
-        setValue("email", savedEmail);
-        setValue("rememberMe", true);
-      }
+      localStorage.removeItem("smarthire_remembered_email");
+      localStorage.removeItem("smarthire_remember_me");
     } catch {
       // Ignore SSR/storage error
     }
-  }, [setValue]);
+  }, []);
 
   const onSubmit = async (values: LoginFormValues) => {
     logger.info(`[LoginPage] Submit credentials for: ${values.email}`);
@@ -59,12 +55,11 @@ function LoginFormContent() {
     setErrorMsg(null);
 
     try {
-      if (values.rememberMe) {
-        localStorage.setItem("smarthire_remembered_email", values.email);
-        localStorage.setItem("smarthire_remember_me", "true");
-      } else {
+      try {
         localStorage.removeItem("smarthire_remembered_email");
         localStorage.removeItem("smarthire_remember_me");
+      } catch {
+        // Ignore
       }
 
       // 1. Sign in with browser client to set document.cookie synchronously
@@ -83,19 +78,38 @@ function LoginFormContent() {
 
       const user = signInData?.user;
       logger.info("[LoginPage] Sign in successful", user?.id);
-      
-      const role = user?.user_metadata?.role || "candidate";
+
+      // Check role from metadata or identity table
+      let role = user?.user_metadata?.role || "candidate";
+      if (user?.id) {
+        const { data: dbUser } = await supabase
+          .schema("identity")
+          .from("users")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (dbUser?.role) role = dbUser.role;
+      }
+
       let redirectPath = redirectTo || "/candidate/dashboard";
       if (!redirectTo) {
-        if (role === "platform-admin") {
-          redirectPath = "/admin/system";
+        const emailLower = user?.email?.toLowerCase() || "";
+        if (role === "admin" || role === "platform-admin" || emailLower.includes("admin")) {
+          redirectPath = "/admin/dashboard";
         } else if (role === "recruiter" || role === "company-admin") {
-          const savedProfileKey = `smarthire_active_recruiter_profile_${user?.id}`;
-          const savedProfile = localStorage.getItem(savedProfileKey) || localStorage.getItem("smarthire_active_recruiter_profile");
-          if (!savedProfile) {
-            redirectPath = "/recruiter/profile";
+          // Check database profile_completed status
+          const { data: recData } = await supabase
+            .schema("organization")
+            .from("recruiters")
+            .select("profile_completed, company_id")
+            .eq("user_id", user?.id)
+            .is("deleted_at", null)
+            .maybeSingle();
+
+          if (!recData || !recData.profile_completed || !recData.company_id) {
+            redirectPath = "/recruiter/profile?onboarding=true";
           } else {
-            redirectPath = "/recruiter/jobs";
+            redirectPath = "/recruiter/dashboard";
           }
         }
       }
@@ -153,16 +167,7 @@ function LoginFormContent() {
             disabled={loading}
             {...register("password")}
           />
-          <div className="flex items-center justify-between pt-1">
-            <label className="flex items-center gap-2 text-xs font-medium text-zinc-600 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                disabled={loading}
-                className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                {...register("rememberMe")}
-              />
-              <span>Remember me</span>
-            </label>
+          <div className="flex justify-end pt-1">
             <Link
               href="/forgot-password"
               className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors"

@@ -45,8 +45,12 @@ export async function middleware(request: NextRequest) {
   // If user is already authenticated and visits /login or /register, redirect to their role dashboard
   if ((pathname === "/login" || pathname === "/register") && user) {
     let target = "/candidate/dashboard";
-    if (role === "platform-admin") target = "/admin/system";
-    else if (role === "recruiter" || role === "company-admin") target = "/recruiter/jobs";
+    const userEmail = user.email?.toLowerCase() || "";
+    if (role === "platform-admin" || role === "admin" || userEmail.includes("admin")) {
+      target = "/admin/dashboard";
+    } else if (role === "recruiter" || role === "company-admin") {
+      target = "/recruiter/dashboard";
+    }
     return NextResponse.redirect(new URL(target, request.url));
   }
 
