@@ -1711,8 +1711,19 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                       <div className="flex justify-between"><span className="font-medium text-zinc-500">Pending:</span><span className="font-bold text-amber-600">{pending}</span></div>
                     </div>
 
-                    <div className="mt-4 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] font-bold text-violet-600">
-                      <span>Open AI Interview Details →</span>
+                    <div className="mt-4 pt-2 border-t border-zinc-100 flex items-center justify-between">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (selectedJobId) {
+                            router.push(`/recruiter/jobs/${selectedJobId}/ai-interview`);
+                          }
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <Calendar className="h-3 w-3" /> Schedule AI Interview
+                      </button>
+                      <span className="text-[10px] font-bold text-violet-600">Open AI Interview Details →</span>
                     </div>
                   </div>
                 );
@@ -2118,6 +2129,17 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                       </div>
                     </div>
 
+                    <button
+                      onClick={() => {
+                        if (selectedJobId) {
+                          router.push(`/recruiter/jobs/${selectedJobId}/ai-interview`);
+                        }
+                      }}
+                      className="w-full bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold h-7.5 rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                    >
+                      <Calendar className="h-3.5 w-3.5" /> Schedule AI Interview
+                    </button>
+
                     <div className="pt-2 border-t border-zinc-100 space-y-2">
                       <div className="flex items-center justify-between text-[9px] font-bold text-zinc-500">
                         <span>Top Candidates Advancement:</span>
@@ -2172,6 +2194,7 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                         onReject={col.key === "offer_sent" ? undefined : (c) => handleRejectCandidate(c, col.key)}
                         onReinstate={(c) => handleReinstateCandidate(c, col.key)}
                         onFullScreen={(c) => setFullScreenModalCard(c as any)}
+                        onScheduleInterview={() => router.push(`/recruiter/jobs/${selectedJobId}/ai-interview`)}
                         nextStageName={nextCol?.name}
                       />
                     );

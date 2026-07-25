@@ -39,6 +39,7 @@ interface ApplicationCardProps {
   onReject?: (card: CandidateAppCard) => void;
   onReinstate?: (card: CandidateAppCard) => void;
   onFullScreen?: (card: CandidateAppCard) => void;
+  onScheduleInterview?: (card: CandidateAppCard) => void;
   nextStageName?: string;
 }
 
@@ -219,7 +220,7 @@ const AVATAR_COLORS = [
   "from-rose-500 to-pink-600",
 ];
 
-export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstate, onFullScreen, nextStageName }: ApplicationCardProps) {
+export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstate, onFullScreen, onScheduleInterview, nextStageName }: ApplicationCardProps) {
   const isRejected = card.status === "rejected" || card.status === "withdrawn";
   const isOfferStage = ["offer_sent", "offered", "offer_accepted", "joined"].includes(card.status);
 
@@ -304,6 +305,21 @@ export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstat
       <div className="border-t border-zinc-100 pt-2">
         <ScoreBadge card={card} />
       </div>
+
+      {/* Schedule AI Interview Button on Card */}
+      {(card.status === "interview" || card.status === "ai_interview") && onScheduleInterview && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onScheduleInterview(card);
+          }}
+          className="w-full mt-1.5 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-violet-600 hover:bg-violet-700 text-white shadow-xs transition-colors cursor-pointer"
+        >
+          <Calendar className="h-3 w-3" />
+          <span>Schedule AI Interview</span>
+        </button>
+      )}
 
       {/* Tags */}
       {card.tags && card.tags.length > 0 && (
