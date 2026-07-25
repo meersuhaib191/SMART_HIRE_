@@ -266,6 +266,9 @@ export default function CandidateCodingExamPage() {
     } catch (err) {
       logger.error("Error starting exam attempt timestamp", err);
     } finally {
+      if (typeof document !== "undefined" && document.documentElement?.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
       setExamStarted(true);
     }
   };
