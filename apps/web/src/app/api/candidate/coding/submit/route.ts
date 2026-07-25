@@ -4,6 +4,41 @@ import { evaluateCodeWithGemini, GeminiCodingEvaluationResult } from "@/services
 import { logger } from "@smarthire/logger";
 import { executeUniversalCode } from "../run/route";
 
+function normalizeOutput(output: string): string {
+  return String(output ?? "")
+    .trim()
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .replace(/\n+$/, "");
+}
+
+function outputsMatch(actual: string, expected: string): boolean {
+  const normActual = normalizeOutput(actual);
+  const normExpected = normalizeOutput(expected);
+
+  if (normExpected.length === 0) return false;
+  if (normActual.toLowerCase() === normExpected.toLowerCase()) return true;
+
+  const actualLines = normActual.toLowerCase().split("\n").filter(Boolean);
+  const expectedLines = normExpected.toLowerCase().split("\n").filter(Boolean);
+
+  if (actualLines.length === expectedLines.length) {
+    const allMatch = actualLines.every((line, i) => line.trim() === expectedLines[i].trim());
+    if (allMatch) return true;
+  }
+
+  if (!normActual.includes("\n") && !normExpected.includes("\n")) {
+    const numActual = Number(normActual);
+    const numExpected = Number(normExpected);
+    if (!isNaN(numActual) && !isNaN(numExpected) && numActual === numExpected) return true;
+  }
+
+  return false;
+}
+
 // ─── Blank Submission Detection ───────────────────────────────────────────────
 
 const STARTER_TEMPLATES_SIGNATURES = [
@@ -287,10 +322,7 @@ export async function POST(request: NextRequest) {
           executionFailed = true;
         }
 
-        const isPassed = !executionFailed &&
-          actualOutput.length > 0 &&
-          expectedStr.length > 0 &&
-          actualOutput.trim().toLowerCase() === expectedStr.trim().toLowerCase();
+        const isPassed = !executionFailed && outputsMatch(actualOutput, expectedStr);
 
         if (isPassed) {
           passedCount++;
