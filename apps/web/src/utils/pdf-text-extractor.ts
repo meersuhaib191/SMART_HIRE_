@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParseModule = require("pdf-parse");
 import { logger } from "@smarthire/logger";
 
 /**
@@ -17,48 +15,71 @@ export function normalizeText(text: string): string {
 }
 
 /**
+ * Safely loads pdf-parse module without triggering local test-file resolution bugs in Vercel serverless.
+ */
+function getPdfParseModule(): any {
+  try {
+    // Prefer lib/pdf-parse.js directly to avoid pdf-parse index.js test-file loading bug
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("pdf-parse/lib/pdf-parse.js");
+  } catch {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require("pdf-parse");
+    } catch (err) {
+      logger.warn("[PDFExtractor] pdf-parse module require failed, using stream fallback", err);
+      return null;
+    }
+  }
+}
+
+/**
  * Extracts plain text from a PDF Buffer or Uint8Array.
- * Supports pdf-parse v2 (PDFParse class + Uint8Array) and pdf-parse v1 function,
- * with stream & hex text fallbacks for malformed or scanned PDFs.
+ * Supports pdf-parse v1/v2 with robust in-memory stream fallbacks.
+ * Guaranteed to never crash or throw unhandled exceptions.
  */
 export async function extractTextFromPdfBuffer(buffer: Buffer | Uint8Array): Promise<string> {
-  const cleanBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
-  const uint8Data = new Uint8Array(cleanBuffer);
-
-  // 1. pdf-parse v2 Class API (PDFParse)
-  const PDFParseClass = pdfParseModule?.PDFParse || pdfParseModule?.default?.PDFParse;
-  if (PDFParseClass) {
-    try {
-      const parser = new PDFParseClass(uint8Data);
-      await parser.load();
-      const res = await parser.getText();
-      const extractedText = typeof res === "string" ? res : res?.text || "";
-      if (extractedText && extractedText.trim().length > 0) {
-        return normalizeText(extractedText);
-      }
-    } catch (err) {
-      logger.warn("[PDFExtractor] pdf-parse PDFParse class failed, trying function fallback", err);
-    }
-  }
-
-  // 2. pdf-parse v1 Function API
-  const parseFn = typeof pdfParseModule === "function"
-    ? pdfParseModule
-    : (typeof pdfParseModule?.default === "function" ? pdfParseModule.default : null);
-
-  if (parseFn) {
-    try {
-      const data = await parseFn(cleanBuffer);
-      if (data && data.text && data.text.trim().length > 0) {
-        return normalizeText(data.text);
-      }
-    } catch (err) {
-      logger.warn("[PDFExtractor] pdf-parse function failed, trying stream text fallback", err);
-    }
-  }
-
-  // 3. Stream text fallback (Tj/TJ PDF text operators: literal strings and hex strings)
   try {
+    const cleanBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+    const uint8Data = new Uint8Array(cleanBuffer);
+
+    const pdfParseModule = getPdfParseModule();
+
+    if (pdfParseModule) {
+      // 1. pdf-parse v2 Class API (PDFParse)
+      const PDFParseClass = pdfParseModule?.PDFParse || pdfParseModule?.default?.PDFParse;
+      if (PDFParseClass) {
+        try {
+          const parser = new PDFParseClass(uint8Data);
+          await parser.load();
+          const res = await parser.getText();
+          const extractedText = typeof res === "string" ? res : res?.text || "";
+          if (extractedText && extractedText.trim().length > 0) {
+            return normalizeText(extractedText);
+          }
+        } catch (err) {
+          logger.warn("[PDFExtractor] PDFParse class failed, trying function fallback", err);
+        }
+      }
+
+      // 2. pdf-parse v1 Function API
+      const parseFn = typeof pdfParseModule === "function"
+        ? pdfParseModule
+        : (typeof pdfParseModule?.default === "function" ? pdfParseModule.default : null);
+
+      if (parseFn) {
+        try {
+          const data = await parseFn(cleanBuffer);
+          if (data && data.text && data.text.trim().length > 0) {
+            return normalizeText(data.text);
+          }
+        } catch (err) {
+          logger.warn("[PDFExtractor] pdf-parse function failed, trying stream fallback", err);
+        }
+      }
+    }
+
+    // 3. Stream text fallback (Tj/TJ PDF text operators: literal strings and hex strings)
     const raw = cleanBuffer.toString("latin1");
 
     // Match literal strings: (text) Tj / (text) TJ
@@ -94,24 +115,17 @@ export async function extractTextFromPdfBuffer(buffer: Buffer | Uint8Array): Pro
     if (combinedStreamText.length > 0) {
       return normalizeText(combinedStreamText);
     }
-  } catch {
-    // Ignore fallback failures
-  }
 
-  // 4. Robust fallback: Extract printable ASCII word blocks from raw buffer
-  try {
-    const raw = cleanBuffer.toString("latin1");
-    const asciiBlocks = raw.match(/[A-Za-z0-9@#\$\%\&\*\_\+\-\=\:\;\,\.\/\?\s]{3,}/g) || [];
-    const cleanText = asciiBlocks
-      .map((b) => b.trim())
-      .filter((b) => b.length > 2 && /[a-zA-Z]/.test(b))
-      .join(" ");
-    if (cleanText.trim().length > 0) {
-      return normalizeText(cleanText);
+    // 4. Raw printable text fallback (removes binary control codes)
+    const cleanPrintable = raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, " ");
+    const words = cleanPrintable.split(/\s+/).filter((w) => w.length > 2 && /^[a-zA-Z0-9.,\-()+@#]{2,}$/.test(w));
+    if (words.length > 5) {
+      return normalizeText(words.join(" "));
     }
-  } catch {
-    // Ignore fallback failures
-  }
 
-  return "";
+    return "";
+  } catch (err) {
+    logger.error("[PDFExtractor] Fatal error in extractTextFromPdfBuffer", err);
+    return "";
+  }
 }

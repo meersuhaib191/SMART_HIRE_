@@ -22,10 +22,11 @@ export interface GeminiServiceResponse<T> {
  * Supported models hierarchy in order of preference
  */
 const GEMINI_MODELS = [
-  "gemini-flash-latest",
+  "gemini-2.5-flash",
   "gemini-2.0-flash",
-  "gemini-flash-lite-latest",
-  "gemini-pro-latest",
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
+  "gemini-flash-latest",
 ];
 
 function getApiKey(): string | null {
