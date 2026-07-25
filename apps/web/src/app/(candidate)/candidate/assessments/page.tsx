@@ -815,14 +815,14 @@ export default function CandidateAssessmentsPage() {
               ) : ["interview", "recruiter_review"].includes(trackingGroup.applicationStatus) ? (
                 <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5 space-y-3">
                   <div className="flex items-center gap-2 text-indigo-900 font-bold text-sm">
-                    <Video className="h-5 w-5 text-indigo-600" /> AI Technical Video Interview
+                    <Video className="h-5 w-5 text-indigo-600" /> AI Technical Live Interview
                   </div>
                   <p className="text-xs text-indigo-700 leading-relaxed font-medium">
-                    Your MCQ and Coding evaluations are complete. Enter your scheduled AI Video interview lobby.
+                    Your live AI interview powered by Gemini adapts to the job requirements and your responses.
                   </p>
                   <Link href="/candidate/interviews" className="block">
                     <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-10 rounded-xl shadow-sm cursor-pointer flex items-center justify-center gap-2">
-                      <Video className="h-4 w-4" /> Launch AI Video Lobby
+                      <Video className="h-4 w-4" /> View Interview Room
                     </Button>
                   </Link>
                 </div>

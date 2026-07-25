@@ -44,11 +44,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
       applicationIds,
       scheduledStartAt,
       durationMinutes,
+      focusTopics,
+      focusInstructions,
       title,
     } = body;
 
-    const effectiveDurationMinutes = durationMinutes ? Number(durationMinutes) : 60;
+    const effectiveFocusTopics = (focusTopics || focusInstructions || "").toString().trim();
+    const effectiveDurationMinutes = (durationMinutes && !isNaN(Number(durationMinutes))) ? Math.max(10, Number(durationMinutes)) : 60;
     const assessmentTitle = title || "AI Live Technical Interview";
+
+    if (scheduledStartAt) {
+      const startTime = new Date(scheduledStartAt).getTime();
+      if (isNaN(startTime) || startTime < Date.now() - 5 * 60 * 1000) {
+        return NextResponse.json({ error: "Please select a future interview date and time." }, { status: 400 });
+      }
+    }
 
     const { data: recruiterProfile } = await appClient
       .schema("recruiter")

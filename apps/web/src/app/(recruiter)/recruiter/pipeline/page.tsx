@@ -575,18 +575,30 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
   const [codingValidationError, setCodingValidationError] = React.useState<string | null>(null);
   const [codingSubmitting, setCodingSubmitting] = React.useState(false);
 
-  // Interview scheduling state
+  // Interview scheduling state (AI Interview)
   const [interviewModalOpen, setInterviewModalOpen] = React.useState(false);
-  const [selectedInterviewType, setSelectedInterviewType] = React.useState<"ai_interview" | "zoom_interview">("ai_interview");
   const [interviewCard, setInterviewCard] = React.useState<CandidateAppCard | null>(null);
   const [interviewDateTime, setInterviewDateTime] = React.useState("");
   const [interviewDuration, setInterviewDuration] = React.useState("60");
-  const [interviewerName, setInterviewerName] = React.useState("");
-  const [interviewerEmail, setInterviewerEmail] = React.useState("");
-  const [meetingLink, setMeetingLink] = React.useState("");
   const [interviewNotes, setInterviewNotes] = React.useState("");
-  const [interviewPdfFile, setInterviewPdfFile] = React.useState<File | null>(null);
   const [interviewSubmitting, setInterviewSubmitting] = React.useState(false);
+
+  // Recruiter Final Interview (Google Meet) scheduling state
+  const [recruiterMeetModalOpen, setRecruiterMeetModalOpen] = React.useState(false);
+  const [recruiterMeetCard, setRecruiterMeetCard] = React.useState<CandidateAppCard | null>(null);
+  const [recruiterMeetDateTime, setRecruiterMeetDateTime] = React.useState("");
+  const [recruiterMeetDuration, setRecruiterMeetDuration] = React.useState("60");
+  const [recruiterMeetName, setRecruiterMeetName] = React.useState("");
+  const [recruiterMeetEmail, setRecruiterMeetEmail] = React.useState("");
+  const [recruiterMeetLink, setRecruiterMeetLink] = React.useState("");
+  const [recruiterMeetNotes, setRecruiterMeetNotes] = React.useState("");
+  const [recruiterMeetSubmitting, setRecruiterMeetSubmitting] = React.useState(false);
+
+  const isPastDateSelected = React.useMemo(() => {
+    if (!interviewDateTime) return false;
+    const t = new Date(interviewDateTime).getTime();
+    return !isNaN(t) && t < Date.now() - 5 * 60 * 1000;
+  }, [interviewDateTime]);
 
   // Two-Level View State (summary vs board) & Top N submitting state
   const [viewMode, setViewMode] = React.useState<"summary" | "board">("summary");
@@ -1324,6 +1336,68 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
     }
   };
 
+  const handleSaveRecruiterMeetSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recruiterMeetCard) {
+      alert("Please select a candidate to schedule the Recruiter Live Call.");
+      return;
+    }
+    if (!recruiterMeetDateTime) {
+      alert("Please select an interview start date and time.");
+      return;
+    }
+    setRecruiterMeetSubmitting(true);
+    try {
+      const parsedDate = new Date(recruiterMeetDateTime);
+      const isoDate = isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
+
+      const res = await fetch("/api/interviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicationId: recruiterMeetCard.id,
+          scheduledAt: isoDate,
+          durationMinutes: Number(recruiterMeetDuration) || 60,
+          interviewerName: recruiterMeetName || undefined,
+          interviewerEmail: recruiterMeetEmail || undefined,
+          meetingLink: recruiterMeetLink || undefined,
+          notes: recruiterMeetNotes || undefined,
+          interviewType: "zoom_interview",
+        }),
+      });
+
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resData.error || resData.message || "Failed to schedule Recruiter Live Call");
+      }
+
+      await fetch(`/api/applications/${recruiterMeetCard.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "zoom_interview" }),
+      }).catch(() => {});
+
+      setRecruiterMeetModalOpen(false);
+      setRecruiterMeetCard(null);
+      setRecruiterMeetDateTime("");
+      setRecruiterMeetName("");
+      setRecruiterMeetEmail("");
+      setRecruiterMeetLink("");
+      setRecruiterMeetNotes("");
+
+      await fetchPipelineData();
+
+      const finalMeetLink = resData.data?.meeting_link || recruiterMeetLink;
+      alert(`✅ Recruiter Google Meet Interview Successfully Scheduled!\n\nCandidate: ${recruiterMeetCard.candidate_name}\nGoogle Meet Link: ${finalMeetLink}\nDate & Time: ${new Date(isoDate).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}`);
+    } catch (err: unknown) {
+      logger.error("Failed to save Recruiter Live Call schedule", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Scheduling Error: ${msg}`);
+    } finally {
+      setRecruiterMeetSubmitting(false);
+    }
+  };
+
   const handleSaveInterviewSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedJobId) {
@@ -1338,85 +1412,35 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
     try {
       const parsedDate = new Date(interviewDateTime);
       const isoDate = isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
-      const isAiMode = selectedInterviewType === "ai_interview";
-      const targetStatus = isAiMode ? "interview" : "zoom_interview";
 
-      if (isAiMode) {
-        // Call dedicated AI Interview Scheduler API (supports all candidates or single candidate)
-        const res = await fetch(`/api/recruiter/jobs/${selectedJobId}/schedule-ai-interview`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            applicationIds: interviewCard ? [interviewCard.id] : undefined,
-            scheduledStartAt: isoDate,
-            durationMinutes: Number(interviewDuration) || 60,
-          }),
-        });
+      // Call dedicated AI Interview Scheduler API
+      const res = await fetch(`/api/recruiter/jobs/${selectedJobId}/schedule-ai-interview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicationIds: interviewCard ? [interviewCard.id] : undefined,
+          scheduledStartAt: isoDate,
+          durationMinutes: Number(interviewDuration) || 60,
+          focusTopics: interviewNotes || undefined,
+        }),
+      });
 
-        const resData = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(resData.error || resData.message || "Failed to schedule AI Interview");
-        }
-
-        const scheduledTargetName = interviewCard ? interviewCard.candidate_name : "All Candidates";
-
-        setInterviewModalOpen(false);
-        setInterviewCard(null);
-        setInterviewDateTime("");
-
-        await fetchPipelineData();
-
-        alert(`✅ AI Live Technical Interview Successfully Scheduled (${resData.durationMinutes || 60} mins)!\n\nTarget: ${scheduledTargetName}\nDate & Time: ${new Date(isoDate).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}\n\n🤖 Candidates can now enter the AI Live Interview Room!`);
-      } else {
-        if (!interviewCard) {
-          alert("Please select a specific candidate to schedule a Recruiter Live Call.");
-          setInterviewSubmitting(false);
-          return;
-        }
-
-        const res = await fetch("/api/interviews", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            applicationId: interviewCard.id,
-            scheduledAt: isoDate,
-            durationMinutes: Number(interviewDuration),
-            interviewerName: interviewerName || undefined,
-            interviewerEmail: interviewerEmail || undefined,
-            meetingLink: meetingLink || undefined,
-            notes: interviewNotes || undefined,
-            interviewType: selectedInterviewType,
-          }),
-        });
-
-        const resData = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(formatErrorMessage(resData, "Failed to schedule interview"));
-        }
-
-        await fetch(`/api/applications/${interviewCard.id}/status`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: targetStatus }),
-        }).catch(() => {});
-
-        const finalMeetLink = resData.data?.meeting_link || meetingLink;
-
-        setInterviewModalOpen(false);
-        setInterviewCard(null);
-        setInterviewDateTime("");
-        setInterviewerName("");
-        setInterviewerEmail("");
-        setMeetingLink("");
-        setInterviewNotes("");
-
-        await fetchPipelineData();
-
-        alert(`✅ Recruiter Google Meet Interview Successfully Scheduled!\n\nCandidate: ${interviewCard.candidate_name}\nGoogle Meet Link: ${finalMeetLink}\nDate & Time: ${new Date(isoDate).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}`);
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resData.error || resData.message || "Failed to schedule AI Interview");
       }
-      logger.info(`[PipelinePage] Interview (${selectedInterviewType}) scheduled for job: ${selectedJobId}`);
+
+      setInterviewModalOpen(false);
+      setInterviewCard(null);
+      setInterviewDateTime("");
+      setInterviewNotes("");
+
+      await fetchPipelineData();
+
+      alert(`AI Interview scheduled successfully.`);
+      logger.info(`[PipelinePage] AI Interview scheduled for job: ${selectedJobId}`);
     } catch (err: unknown) {
-      logger.error("Failed to save interview schedule", err);
+      logger.error("Failed to save AI interview schedule", err);
       const msg = err instanceof Error ? err.message : formatErrorMessage(err, "Failed to schedule interview");
       alert(`Scheduling Error: ${msg}`);
     } finally {
@@ -2523,231 +2547,257 @@ onScheduleInterview={(c) => {
 </div>
 )}
 
-{/* Interview Scheduling Modal */}
+{/* Schedule AI Interview Modal */}
 {interviewModalOpen && (
-<div className="fixed inset-0 bg-[#1D1D1F]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-  <form
-    onSubmit={handleSaveInterviewSchedule}
-    className="w-full max-w-lg bg-white border border-[#D2D2D7] rounded-[20px] shadow-2xl p-6 space-y-5 text-left"
-  >
-    {/* Header */}
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center">
-            <Video className="h-4 w-4 text-violet-600" />
-          </div>
-          <h3 className="text-base font-bold text-zinc-900">Schedule Interview</h3>
-        </div>
-        {interviewCard && (
-          <p className="text-[11px] text-zinc-500 font-medium">
-            Candidate: <span className="font-bold text-zinc-800">{interviewCard.candidate_name}</span> — {interviewCard.job_title}
+  <div className="fixed inset-0 bg-[#1D1D1F]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+    <form
+      onSubmit={handleSaveInterviewSchedule}
+      className="w-full max-w-lg bg-white border border-[#D2D2D7] rounded-[20px] shadow-2xl p-6 space-y-5 text-left scale-in-center max-h-[90vh] overflow-y-auto"
+    >
+      <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-3">
+        <div>
+          <h3 className="text-base font-bold text-zinc-900">Schedule AI Interview</h3>
+          <p className="text-[11px] text-[#6E6E73] mt-1 font-medium leading-relaxed">
+            Schedule a live AI interview powered by Gemini. Questions will adapt to the job requirements and candidate responses.
           </p>
-        )}
+          {interviewCard ? (
+            <p className="text-[11px] font-bold text-violet-700 mt-1">
+              Candidate: {interviewCard.candidate_name}
+            </p>
+          ) : (
+            <p className="text-[11px] font-bold text-violet-700 mt-1">
+              Scheduling AI Interview for all candidates in this job pipeline
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => { setInterviewModalOpen(false); setInterviewCard(null); }}
+          className="text-zinc-400 hover:text-zinc-700 h-8 w-8 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+        >
+          ✕
+        </button>
       </div>
-      <button type="button" onClick={() => { setInterviewModalOpen(false); setInterviewCard(null); setInterviewPdfFile(null); }}
-        className="text-zinc-400 hover:text-zinc-700 h-8 w-8 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors">
-        ✕
-      </button>
-    </div>
 
-    <div className="grid grid-cols-2 gap-3.5">
-      {/* 1. Round Type Selector Card */}
-      <div className="col-span-2 space-y-1.5 text-left">
-        <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block">
-          Select Evaluation Round Type *
-        </label>
+      <div className="space-y-4">
+        {/* Date & Time Picker */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-extrabold text-zinc-600 uppercase tracking-wider block">
+            Interview Date & Time *
+          </label>
+          <input
+            type="datetime-local"
+            value={interviewDateTime}
+            onChange={(e) => setInterviewDateTime(e.target.value)}
+            required
+            className="w-full h-10 rounded-xl border border-[#D2D2D7] bg-white px-3.5 text-xs font-semibold text-zinc-900 outline-none focus:border-[#0071E3]"
+          />
+          {isPastDateSelected && (
+            <p className="text-[11px] font-bold text-rose-600 mt-1">
+              Please select a future interview date and time.
+            </p>
+          )}
+        </div>
+
+        {/* Duration Picker */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-extrabold text-zinc-600 uppercase tracking-wider block">
+            Duration
+          </label>
+          <select
+            value={interviewDuration}
+            onChange={(e) => setInterviewDuration(e.target.value)}
+            className="w-full h-10 rounded-xl border border-[#D2D2D7] bg-white px-3 text-xs font-bold text-zinc-900 outline-none focus:border-[#0071E3] cursor-pointer"
+          >
+            <option value="20">20 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="45">45 minutes</option>
+            <option value="60">60 minutes (Default)</option>
+            <option value="75">75 minutes</option>
+            <option value="90">90 minutes</option>
+          </select>
+        </div>
+
+        {/* Focus Topics / Instructions */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-extrabold text-zinc-600 uppercase tracking-wider block">
+            Focus Topics / Instructions (Optional)
+          </label>
+          <textarea
+            value={interviewNotes}
+            onChange={(e) => setInterviewNotes(e.target.value)}
+            placeholder="e.g. Focus on SQL, data analysis, problem solving and stakeholder communication."
+            rows={3}
+            className="w-full rounded-xl border border-[#D2D2D7] bg-white p-3 text-xs font-medium text-zinc-900 outline-none focus:border-[#0071E3] placeholder:text-zinc-400 resize-none"
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-3 pt-3 border-t border-zinc-100">
+        <button
+          type="button"
+          onClick={() => { setInterviewModalOpen(false); setInterviewCard(null); }}
+          className="flex-1 h-9 rounded-xl border border-[#D2D2D7] bg-white hover:bg-zinc-50 text-xs font-bold text-zinc-700 transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={interviewSubmitting || !interviewDateTime || isPastDateSelected}
+          className="flex-1 h-9 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+        >
+          {interviewSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Schedule AI Interview"}
+        </button>
+      </div>
+    </form>
+  </div>
+)}
+
+{/* Schedule Recruiter Final Interview (Google Meet) Modal */}
+{recruiterMeetModalOpen && (
+  <div className="fixed inset-0 bg-[#1D1D1F]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+    <form
+      onSubmit={handleSaveRecruiterMeetSchedule}
+      className="w-full max-w-lg bg-white border border-[#D2D2D7] rounded-[20px] shadow-2xl p-6 space-y-5 text-left max-h-[90vh] overflow-y-auto"
+    >
+      <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-3">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center">
+              <Video className="h-4 w-4 text-indigo-600" />
+            </div>
+            <h3 className="text-base font-bold text-zinc-900">Schedule Recruiter Interview</h3>
+          </div>
+          {recruiterMeetCard && (
+            <p className="text-[11px] text-zinc-500 font-medium">
+              Candidate: <span className="font-bold text-zinc-800">{recruiterMeetCard.candidate_name}</span>
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => { setRecruiterMeetModalOpen(false); setRecruiterMeetCard(null); }}
+          className="text-zinc-400 hover:text-zinc-700 h-8 w-8 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors cursor-pointer"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        {/* Google Meet Link Generator Card */}
+        <div className="p-3.5 bg-indigo-50/60 border border-indigo-200/60 rounded-2xl space-y-2 text-left">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-extrabold text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Video className="h-3.5 w-3.5 text-indigo-600" /> Google Meet Video Room Link *
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const code = `smh-${Math.random().toString(36).slice(2, 5)}-${Math.random().toString(36).slice(2, 6)}`;
+                setRecruiterMeetLink(`https://meet.google.com/${code}`);
+              }}
+              className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 bg-white border border-indigo-200 px-2.5 py-1 rounded-lg shadow-2xs cursor-pointer flex items-center gap-1 transition-colors"
+            >
+              ⚡ Auto-Generate Link
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="url"
+              value={recruiterMeetLink}
+              onChange={(e) => setRecruiterMeetLink(e.target.value)}
+              placeholder="https://meet.google.com/smh-xxx-xxxx"
+              required
+              className="flex-1 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-[12px] font-bold text-zinc-900 focus:border-indigo-600 focus:outline-none shadow-2xs"
+            />
+          </div>
+        </div>
+
+        {/* Interviewer Name & Email */}
         <div className="grid grid-cols-2 gap-3">
-          <div
-            onClick={() => setSelectedInterviewType("ai_interview")}
-            className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
-              selectedInterviewType === "ai_interview"
-                ? "border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/20"
-                : "border-zinc-200 bg-white hover:border-zinc-300"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4 text-blue-600" /> AI Video Interview Round
-              </span>
-              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-600 text-white uppercase">AI Lobby</span>
-            </div>
-            <p className="text-[11px] text-zinc-600 mt-1.5 leading-tight font-medium">
-              Candidate conducts AI video interview in browser lobby. Rated by Gemini AI with automated scorecard.
-            </p>
-          </div>
-
-          <div
-            onClick={() => setSelectedInterviewType("zoom_interview")}
-            className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
-              selectedInterviewType === "zoom_interview"
-                ? "border-violet-600 bg-violet-50/80 ring-2 ring-violet-500/20"
-                : "border-zinc-200 bg-white hover:border-zinc-300"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-violet-950 flex items-center gap-1.5">
-                <Video className="h-4 w-4 text-violet-600" /> Recruiter Live Call
-              </span>
-              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-violet-600 text-white uppercase">Google Meet</span>
-            </div>
-            <p className="text-[11px] text-zinc-600 mt-1.5 leading-tight font-medium">
-              Live video call with human recruiter. Sends Google Meet link for final round evaluation.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Conditional Details based on Type */}
-      {selectedInterviewType === "ai_interview" ? (
-        <div className="col-span-2 p-3.5 bg-blue-50/80 border border-blue-200/80 rounded-2xl flex items-center gap-3 text-left">
-          <div className="p-2.5 rounded-xl bg-blue-600 text-white shrink-0 shadow-sm">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div>
-            <h4 className="text-xs font-extrabold text-blue-950">AI Video Lobby Option Enabled</h4>
-            <p className="text-[11px] text-blue-900 font-medium leading-relaxed mt-0.5">
-              Candidate will be able to enter the <strong>AI Video Interview Room</strong> directly from their applicant portal at the scheduled time. No Google Meet link required!
-            </p>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Google Meet Link Generator Card */}
-          <div className="col-span-2 p-3.5 bg-violet-50/60 border border-violet-200/60 rounded-2xl space-y-2 text-left shadow-2xs">
-            <div className="flex items-center justify-between">
-              <label className="text-[10px] font-extrabold text-violet-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Video className="h-3.5 w-3.5 text-violet-600" /> Google Meet Video Room Link *
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  const code = `smh-${Math.random().toString(36).slice(2, 5)}-${Math.random().toString(36).slice(2, 6)}`;
-                  setMeetingLink(`https://meet.google.com/${code}`);
-                }}
-                className="text-[10px] font-bold text-violet-700 hover:text-violet-900 bg-white border border-violet-200 px-2.5 py-1 rounded-lg shadow-2xs cursor-pointer flex items-center gap-1 transition-colors"
-              >
-                ⚡ Auto-Generate Link
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="url"
-                value={meetingLink}
-                onChange={e => setMeetingLink(e.target.value)}
-                placeholder="https://meet.google.com/smh-xxx-xxxx"
-                required={selectedInterviewType === "zoom_interview"}
-                className="flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2 text-[12px] font-bold text-zinc-900 focus:border-violet-600 focus:outline-none shadow-2xs"
-              />
-              {meetingLink && (
-                <a
-                  href={meetingLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold shrink-0 transition-colors shadow-2xs flex items-center gap-1"
-                >
-                  Test Link 🔗
-                </a>
-              )}
-            </div>
-          </div>
-
-          {/* Interviewer Name & Email */}
-          <div className="col-span-1 space-y-1">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Interviewer Name</label>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Interviewer Name</label>
             <input
               type="text"
-              value={interviewerName}
-              onChange={e => setInterviewerName(e.target.value)}
+              value={recruiterMeetName}
+              onChange={(e) => setRecruiterMeetName(e.target.value)}
               placeholder="e.g. Sarah Jenkins"
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[12px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none"
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[12px] font-bold text-zinc-800 focus:border-indigo-500 focus:outline-none"
             />
           </div>
 
-          <div className="col-span-1 space-y-1">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Interviewer Email</label>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Interviewer Email</label>
             <input
               type="email"
-              value={interviewerEmail}
-              onChange={e => setInterviewerEmail(e.target.value)}
+              value={recruiterMeetEmail}
+              onChange={(e) => setRecruiterMeetEmail(e.target.value)}
               placeholder="interviewer@company.com"
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[12px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none"
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[12px] font-bold text-zinc-800 focus:border-indigo-500 focus:outline-none"
             />
           </div>
-        </>
-      )}
+        </div>
 
-      <div className="col-span-2">
-        <PdfUploader
-          label="Upload Interview Evaluation Rubric / Questions PDF (Optional)"
-          description="Upload custom interview questions or rubric (.pdf file)"
-          file={interviewPdfFile}
-          onFileChange={setInterviewPdfFile}
-        />
+        {/* Date & Time */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Interview Date & Time *</label>
+            <input
+              type="datetime-local"
+              value={recruiterMeetDateTime}
+              onChange={(e) => setRecruiterMeetDateTime(e.target.value)}
+              required
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2 text-[12px] font-bold text-zinc-800 focus:border-indigo-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Duration</label>
+            <select
+              value={recruiterMeetDuration}
+              onChange={(e) => setRecruiterMeetDuration(e.target.value)}
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2 text-[12px] font-bold text-zinc-800 focus:border-indigo-500 focus:outline-none cursor-pointer"
+            >
+              <option value="30">30 minutes</option>
+              <option value="45">45 minutes</option>
+              <option value="60">60 minutes</option>
+              <option value="90">90 minutes</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Focus Topics / Notes (Optional)</label>
+          <textarea
+            value={recruiterMeetNotes}
+            onChange={(e) => setRecruiterMeetNotes(e.target.value)}
+            placeholder="Focus topics or notes for human interviewer..."
+            rows={2}
+            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2 text-[12px] text-zinc-800 focus:border-indigo-500 focus:outline-none resize-none"
+          />
+        </div>
       </div>
 
-      {/* Date & Time */}
-      <div className="col-span-1 space-y-1">
-        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
-          <Calendar className="h-3 w-3" /> Interview Date & Time *
-        </label>
-        <input
-          type="datetime-local"
-          value={interviewDateTime}
-          onChange={e => setInterviewDateTime(e.target.value)}
-          required
-          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2 text-[12px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none transition-colors"
-        />
-      </div>
-
-      {/* Duration */}
-      <div className="col-span-1 space-y-1">
-        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
-          <Clock className="h-3 w-3" /> Duration
-        </label>
-        <select
-          value={interviewDuration}
-          onChange={e => setInterviewDuration(e.target.value)}
-          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2 text-[12px] font-bold text-zinc-800 focus:border-violet-500 focus:outline-none"
+      <div className="flex justify-end gap-3 pt-3 border-t border-zinc-100">
+        <button
+          type="button"
+          onClick={() => { setRecruiterMeetModalOpen(false); setRecruiterMeetCard(null); }}
+          className="px-4 py-2 text-[12px] font-bold text-zinc-600 rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer"
         >
-          <option value="30">30 minutes</option>
-          <option value="45">45 minutes</option>
-          <option value="60">60 minutes</option>
-          <option value="90">90 minutes</option>
-          <option value="120">2 hours</option>
-        </select>
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={recruiterMeetSubmitting || !recruiterMeetDateTime || !recruiterMeetLink}
+          className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[12px] font-bold px-5 py-2 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center gap-1.5"
+        >
+          {recruiterMeetSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Confirm Recruiter Interview"}
+        </button>
       </div>
-
-      {/* Notes */}
-      <div className="col-span-2 space-y-1">
-        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Focus Topics / Notes (Optional)</label>
-        <textarea
-          value={interviewNotes}
-          onChange={e => setInterviewNotes(e.target.value)}
-          placeholder="Topics to cover, specific technical areas to probe..."
-          rows={2}
-          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2 text-[12px] text-zinc-800 focus:border-violet-500 focus:outline-none resize-none placeholder:text-zinc-300"
-        />
-      </div>
-    </div>
-
-    <div className="flex justify-end gap-3 pt-2 border-t border-zinc-100">
-      <button type="button" onClick={() => { setInterviewModalOpen(false); setInterviewCard(null); setInterviewPdfFile(null); }}
-        className="px-4 py-2 text-[12px] font-bold text-zinc-600 rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer">
-        Cancel
-      </button>
-      <button type="submit" disabled={interviewSubmitting || !interviewDateTime}
-        className="bg-violet-600 hover:bg-violet-700 text-white text-[12px] font-bold px-5 py-2 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
-        {interviewSubmitting ? (
-          <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Scheduling...</>
-        ) : (
-          <><Video className="h-3.5 w-3.5" /> Confirm Interview</>
-        )}
-      </button>
-    </div>
-  </form>
-</div>
+    </form>
+  </div>
 )}
 
 {/* Offer Letter Generator & PDF Preview Modal */}
