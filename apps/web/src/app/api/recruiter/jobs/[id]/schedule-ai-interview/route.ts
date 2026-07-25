@@ -31,6 +31,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
     }
 
+    // 2. Fetch Job details first
+    const { data: job } = await jobClient
+      .from("jobs")
+      .select("id, title, description, company_id")
+      .eq("id", jobId)
+      .single();
+
+    if (!job) {
+      return NextResponse.json({ error: "Job posting not found" }, { status: 404 });
+    }
+
     const { data: recruiterProfile } = await appClient
       .schema("recruiter")
       .from("profiles")
@@ -38,39 +49,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!recruiterProfile?.company_id) {
-      return NextResponse.json({ error: "Recruiter organization profile not found" }, { status: 403 });
-    }
+    const companyId = job.company_id || recruiterProfile?.company_id;
 
-    const body = await request.json();
-    const {
-      candidateIds,
-      applicationIds,
-      scheduledStartAt,
-      durationMinutes,
-      title,
-    } = body;
-
-    // DEFAULT DURATION: 60 MINUTES
-    const effectiveDurationMinutes = durationMinutes ? Number(durationMinutes) : 60;
-    const assessmentTitle = title || "AI Live Technical Interview";
-
-    // 2. Fetch Job details
-    const { data: job } = await jobClient
-      .from("jobs")
-      .select("id, title, description")
-      .eq("id", jobId)
-      .single();
-
-    if (!job) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    if (!companyId) {
+      return NextResponse.json({ error: "Company organization ID not found for this job posting" }, { status: 400 });
     }
 
     // 3. Find or create AI Interview Assessment Template
     const { data: existingAssessments } = await assessmentClient
       .from("assessments")
       .select("id")
-      .eq("company_id", recruiterProfile.company_id)
+      .eq("company_id", companyId)
       .eq("type", "ai_interview")
       .limit(1);
 
@@ -80,13 +69,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       const { data: newAss, error: createErr } = await assessmentClient
         .from("assessments")
         .insert({
-          company_id: recruiterProfile.company_id,
+          company_id: companyId,
           title: assessmentTitle,
           description: `Real-time conversational AI Technical Interview for ${job.title}`,
           type: "ai_interview",
           duration_minutes: effectiveDurationMinutes,
           pass_percentage: 60,
-          created_by: recruiterProfile.id,
+          created_by: recruiterProfile?.id || null,
         })
         .select("id")
         .single();
@@ -159,7 +148,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       const { data: assign, error: assignErr } = await assessmentClient
         .from("assignments")
         .upsert({
-          company_id: recruiterProfile.company_id,
+          company_id: companyId,
           assessment_id: finalAssessmentId,
           application_id: app.id,
           candidate_id: app.candidate_id,

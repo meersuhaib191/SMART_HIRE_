@@ -75,58 +75,114 @@ export default function RecruiterAIInterviewDetailsPage() {
     try {
       setLoading(true);
 
-      // Fetch Job info
-      const { data: job } = await supabase
+      // 1. Fetch Job info with schema fallbacks
+      let job: any = null;
+      const { data: jobSchemaData } = await supabase
         .schema("job")
         .from("jobs")
         .select("title, company_id")
         .eq("id", jobId)
-        .single();
+        .maybeSingle();
+
+      job = jobSchemaData;
+      if (!job) {
+        const { data: jobPublicData } = await supabase
+          .from("jobs")
+          .select("title, company_id")
+          .eq("id", jobId)
+          .maybeSingle();
+        job = jobPublicData;
+      }
 
       if (job?.title) setJobTitle(job.title);
 
-      // Fetch Applications for this job in 'ai_interview' or related stages
-      const { data: apps } = await supabase
+      // 2. Fetch Applications for this job with schema fallbacks
+      let apps: any[] = [];
+      const { data: appsPublicData } = await supabase
         .from("applications")
         .select("id, candidate_id, status, ai_interview_score, updated_at")
         .eq("job_id", jobId);
 
-      if (!apps || apps.length === 0) {
+      apps = appsPublicData || [];
+      if (apps.length === 0) {
+        const { data: appsSchemaData } = await supabase
+          .schema("application")
+          .from("applications")
+          .select("id, candidate_id, status, ai_interview_score, updated_at")
+          .eq("job_id", jobId);
+        apps = appsSchemaData || [];
+      }
+
+      if (apps.length === 0) {
         setCandidates([]);
         setLoading(false);
         return;
       }
 
-      // Fetch Candidate Profiles
+      // 3. Fetch Candidate Profiles with schema fallbacks
       const candidateIds = apps.map((a) => a.candidate_id);
-      const { data: profiles } = await supabase
+      let profiles: any[] = [];
+
+      const { data: candSchemaData } = await supabase
         .schema("candidate")
         .from("candidates")
         .select("id, first_name, last_name, email")
         .in("id", candidateIds);
 
-      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+      profiles = candSchemaData || [];
+      if (profiles.length === 0) {
+        const { data: candPublicData } = await supabase
+          .from("candidates")
+          .select("id, first_name, last_name, email")
+          .in("id", candidateIds);
+        profiles = candPublicData || [];
+      }
 
-      // Fetch Assignments & Attempts
-      const { data: assignments } = await supabase
+      const profileMap = new Map(profiles.map((p) => [p.id, p]));
+
+      // 4. Fetch Assignments & Attempts
+      const appIds = apps.map((a) => a.id);
+      let assignments: any[] = [];
+
+      const { data: assignSchemaData } = await supabase
         .schema("assessment")
         .from("assignments")
         .select("id, application_id, assessment_id, status")
-        .in("application_id", apps.map((a) => a.id))
+        .in("application_id", appIds)
         .eq("type", "ai_interview");
 
-      const assignMap = new Map((assignments || []).map((a) => [a.application_id, a]));
+      assignments = assignSchemaData || [];
+      if (assignments.length === 0) {
+        const { data: assignPublicData } = await supabase
+          .from("assignments")
+          .select("id, application_id, assessment_id, status")
+          .in("application_id", appIds)
+          .eq("type", "ai_interview");
+        assignments = assignPublicData || [];
+      }
 
-      const assignIds = (assignments || []).map((a) => a.id);
+      const assignMap = new Map(assignments.map((a) => [a.application_id, a]));
+
+      const assignIds = assignments.map((a) => a.id);
       let attemptMap = new Map();
       if (assignIds.length > 0) {
-        const { data: attempts } = await supabase
+        let attempts: any[] = [];
+        const { data: attSchemaData } = await supabase
           .schema("assessment")
           .from("attempts")
           .select("*")
           .in("assignment_id", assignIds);
 
-        attemptMap = new Map((attempts || []).map((att) => [att.assignment_id, att]));
+        attempts = attSchemaData || [];
+        if (attempts.length === 0) {
+          const { data: attPublicData } = await supabase
+            .from("attempts")
+            .select("*")
+            .in("assignment_id", assignIds);
+          attempts = attPublicData || [];
+        }
+
+        attemptMap = new Map(attempts.map((att) => [att.assignment_id, att]));
       }
 
       const mapped: CandidateInterviewItem[] = apps.map((app) => {
