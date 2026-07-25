@@ -313,10 +313,31 @@ function AssessmentCard({ item, now }: { item: AssignmentItem; now: Date }) {
               <Lock className="h-3.5 w-3.5 mr-1.5" /> Locked Until Scheduled Time
             </Button>
           ) : (
-            <Link href={item.type === "coding" ? `/candidate/coding/${item.id}/exam` : `/candidate/assessments/${item.id}/exam`} className="w-full">
-              <Button className={`w-full h-9 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer ${item.type === "coding" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
-                }`}>
-                {item.type === "coding" ? "Launch Coding IDE" : "Start MCQ Test"} <Play className="h-3.5 w-3.5" />
+            <Link
+              href={
+                item.type === "ai_interview"
+                  ? `/candidate/ai-interview/${item.id}/exam`
+                  : item.type === "coding"
+                  ? `/candidate/coding/${item.id}/exam`
+                  : `/candidate/assessments/${item.id}/exam`
+              }
+              className="w-full"
+            >
+              <Button
+                className={`w-full h-9 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer ${
+                  item.type === "ai_interview"
+                    ? "bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+                    : item.type === "coding"
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                }`}
+              >
+                {item.type === "ai_interview"
+                  ? "Start AI Live Interview"
+                  : item.type === "coding"
+                  ? "Launch Coding IDE"
+                  : "Start MCQ Test"}{" "}
+                <Play className="h-3.5 w-3.5" />
               </Button>
             </Link>
           )}
