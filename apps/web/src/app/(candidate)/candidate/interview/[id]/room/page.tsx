@@ -42,6 +42,12 @@ export default function HandsFreeAIVideoCallRoomPage() {
   const router = useRouter();
   const interviewId = params?.id as string;
 
+  React.useEffect(() => {
+    if (interviewId) {
+      router.replace(`/candidate/ai-interview/${interviewId}/exam`);
+    }
+  }, [interviewId, router]);
+
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);

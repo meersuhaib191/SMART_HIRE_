@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       .eq("id", assignment.assessment_id)
       .maybeSingle();
 
-    const durationMinutes = tmpl?.duration_minutes ? Number(tmpl.duration_minutes) : 60;
+    const durationMinutes = (assignment as any).duration_minutes || (tmpl?.duration_minutes ? Number(tmpl.duration_minutes) : 60);
     const assessmentTitle = tmpl?.title || "AI Live Technical Interview";
 
     // 5. Fetch Application & Job details for context

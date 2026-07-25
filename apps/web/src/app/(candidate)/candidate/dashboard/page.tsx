@@ -335,10 +335,10 @@ export default function CandidateDashboardPage() {
                             </div>
                           </div>
                           <a
-                            href={`/candidate/interview/${int.id}/room`}
+                            href={`/candidate/ai-interview/${int.id}/exam`}
                             className="inline-flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl px-4 py-2 text-xs font-bold shadow-sm shrink-0"
                           >
-                            <Play className="h-3.5 w-3.5" /> Enter Video Lobby
+                            <Play className="h-3.5 w-3.5" /> Start Gemini Live Interview
                           </a>
                         </div>
                       ))}

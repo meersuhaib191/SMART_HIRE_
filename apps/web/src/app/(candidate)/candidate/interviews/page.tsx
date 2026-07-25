@@ -283,10 +283,10 @@ export default function CandidateInterviewsPage() {
                           </span>
                         ) : isAI ? (
                           <a
-                            href={`/candidate/interview/${round.id}/room`}
+                            href={`/candidate/ai-interview/${round.id}/exam`}
                             className="inline-flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl px-4 py-2 text-xs font-bold h-9 shadow-sm transition-all"
                           >
-                            <Video className="h-4 w-4" /> Start AI Interview
+                            <Video className="h-4 w-4" /> Start Gemini Live Interview
                           </a>
                         ) : round.meeting_link ? (
                           (() => {
