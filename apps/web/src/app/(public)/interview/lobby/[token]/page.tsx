@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@smarthire/ui";
-import { Video, Mic, MicOff, Camera, CameraOff, Volume2, ShieldCheck, UserCheck, FileText, ArrowRight, Loader2, RefreshCw } from "lucide-react";
+import { Video, Mic, MicOff, Camera, CameraOff, Volume2, ShieldCheck, UserCheck, FileText, ArrowRight, Loader2, RefreshCw, Clock, Sparkles, AlertCircle } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { MeetingSessionData } from "@/services/interview/meeting-service";
 
