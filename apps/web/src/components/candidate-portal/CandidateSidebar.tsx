@@ -4,7 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { resolveCandidateProfileIds } from "@/utils/candidate-helper";
 import { useAuth } from "@/hooks/use-auth";
+import { useNotifications } from "@/hooks/use-notifications";
+import { UnreadDot } from "@/components/shared/UnreadDot";
 import { Button } from "@smarthire/ui";
 import {
   LayoutDashboard,
@@ -12,17 +15,21 @@ import {
   FileText,
   Briefcase,
   FileSpreadsheet,
+  History,
   ClipboardCheck,
   Calendar,
-  History,
   Menu,
   X,
+  LogOut,
   LogIn,
+  Settings,
+  Gift,
 } from "lucide-react";
 
 export function CandidateSidebar() {
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuth();
+  const { hasUnreadForContext } = useNotifications();
   const [hasSoonExam, setHasSoonExam] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
@@ -35,20 +42,14 @@ export function CandidateSidebar() {
         const userObj = authRes?.data?.user;
         if (!userObj) return;
 
-        const { data: candidate } = await supabase
-          .schema("candidate")
-          .from("candidates")
-          .select("id")
-          .eq("user_id", userObj.id)
-          .maybeSingle();
-
-        if (!candidate) return;
+        const candIds = await resolveCandidateProfileIds(supabase, userObj);
+        if (candIds.length === 0) return;
 
         const { data: assignments } = await supabase
           .schema("assessment")
           .from("assignments")
           .select("status, scheduled_start_at, expires_at")
-          .eq("candidate_id", candidate.id);
+          .in("candidate_id", candIds);
 
         if (!active) return;
 
@@ -92,11 +93,19 @@ export function CandidateSidebar() {
     { label: "Profile Specs", href: "/candidate/profile", icon: User },
     { label: "Resume Hub", href: "/candidate/resume", icon: FileText },
     { label: "Search Jobs", href: "/candidate/jobs", icon: Briefcase },
-    { label: "My Applications", href: "/candidate/applications", icon: FileSpreadsheet },
+    { label: "My Applications", href: "/candidate/applications", icon: FileSpreadsheet, category: "applications" as const },
     { label: "Job History", href: "/candidate/history", icon: History },
-    { label: "Assessments", href: "/candidate/assessments", icon: ClipboardCheck },
-    { label: "Interviews", href: "/candidate/interviews", icon: Calendar },
+    { label: "Assessments", href: "/candidate/assessments", icon: ClipboardCheck, category: "assessments" as const },
+    { label: "Interviews", href: "/candidate/interviews", icon: Calendar, category: "interviews" as const },
   ];
+
+  const checkItemUnread = (link: (typeof links)[0]) => {
+    if (link.label === "Assessments" && hasSoonExam) return true;
+    if (link.category) {
+      return hasUnreadForContext({ category: link.category });
+    }
+    return false;
+  };
 
   return (
     <>
@@ -188,6 +197,7 @@ export function CandidateSidebar() {
                 {links.map((link) => {
                   const isActive = pathname === link.href;
                   const Icon = link.icon;
+                  const isUnread = checkItemUnread(link);
 
                   return (
                     <Link
@@ -203,12 +213,7 @@ export function CandidateSidebar() {
                         <Icon className="h-4.5 w-4.5 shrink-0" />
                         <span>{link.label}</span>
                       </div>
-                      {link.label === "Assessments" && hasSoonExam && (
-                        <span className="relative flex h-2 w-2 mr-1">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                        </span>
-                      )}
+                      {isUnread && <UnreadDot size="sm" className="mr-1" />}
                     </Link>
                   );
                 })}
@@ -238,6 +243,7 @@ export function CandidateSidebar() {
           {links.map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
+            const isUnread = checkItemUnread(link);
 
             return (
               <Link
@@ -253,12 +259,7 @@ export function CandidateSidebar() {
                   <Icon className="h-4.5 w-4.5 shrink-0" />
                   <span>{link.label}</span>
                 </div>
-                {link.label === "Assessments" && hasSoonExam && (
-                  <span className="relative flex h-2 w-2 mr-1">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                  </span>
-                )}
+                {isUnread && <UnreadDot size="sm" className="mr-1" />}
               </Link>
             );
           })}

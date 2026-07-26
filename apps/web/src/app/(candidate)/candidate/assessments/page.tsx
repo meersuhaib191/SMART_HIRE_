@@ -10,6 +10,7 @@ import { logger } from "@smarthire/logger";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
 import { isTechDomain } from "@/utils/domain-utils";
+import { resolveCandidateProfileIds } from "@/utils/candidate-helper";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -366,30 +367,14 @@ export default function CandidateAssessmentsPage() {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (!authUser) return;
 
-        // Get candidate profile
-        let { data: profile } = await supabase
-          .schema("candidate").from("candidates")
-          .select("id").eq("user_id", authUser.id).maybeSingle();
-
-        if (!profile) {
-          const { data: newP } = await supabase
-            .schema("candidate").from("candidates")
-            .insert({
-              user_id: authUser.id,
-              email: authUser.email || "",
-              first_name: authUser.user_metadata?.first_name || "Candidate",
-              last_name: authUser.user_metadata?.last_name || "",
-              summary: "", tags: []
-            }).select("id").single();
-          profile = newP;
-        }
-        if (!profile) return;
+        const candIds = await resolveCandidateProfileIds(supabase, authUser);
+        if (candIds.length === 0) return;
 
         // Fetch applications with job info
         const { data: applications } = await supabase
           .schema("application").from("applications")
           .select("id, job_id, status, created_at, mcq_score, mcq_passed, coding_score, coding_passed")
-          .eq("candidate_id", profile.id)
+          .in("candidate_id", candIds)
           .is("deleted_at", null)
           .order("created_at", { ascending: false });
 
@@ -409,7 +394,7 @@ export default function CandidateAssessmentsPage() {
         const { data: rawAssignments } = await supabase
           .schema("assessment").from("assignments")
           .select("id, assessment_id, application_id, status, expires_at, created_at, scheduled_start_at")
-          .eq("candidate_id", profile.id);
+          .in("candidate_id", candIds);
 
         // Fetch templates
         const { data: templates } = await supabase
@@ -430,7 +415,7 @@ export default function CandidateAssessmentsPage() {
         const { data: rawAttempts } = await supabase
           .schema("assessment").from("attempts")
           .select("id, score, passed, started_at, completed_at, assessment_id, assignment_id")
-          .eq("candidate_id", profile.id);
+          .in("candidate_id", candIds);
 
         // Stage completion tracking lookup
         // Stages AFTER which MCQ/coding is considered complete (status = "mcq" means currently IN mcq, not done)
@@ -457,17 +442,19 @@ export default function CandidateAssessmentsPage() {
             const attempt = (rawAttempts || []).find(
               a => a.assignment_id === assignment.id || a.assessment_id === assignment.assessment_id
             );
-            const isCoding = codingIds.has(assignment.assessment_id) ||
-              Boolean(tmpl?.title?.toLowerCase().includes("coding"));
+            const isAiInterview = Boolean(tmpl?.title?.toLowerCase().includes("ai")) || Boolean(tmpl?.title?.toLowerCase().includes("interview"));
+            const isCoding = !isAiInterview && (codingIds.has(assignment.assessment_id) ||
+              Boolean(tmpl?.title?.toLowerCase().includes("coding")));
+            const itemType = isAiInterview ? "ai_interview" : (isCoding ? "coding" : "mcq");
 
             // If assignment was explicitly reset to "assigned" (recruiter rescheduled), it is NOT done
             const wasRescheduled = assignment.status === "assigned";
             const isDone = !wasRescheduled && (
               assignment.status === "completed" ||
               Boolean(attempt?.completed_at) ||
-              (isCoding
+              (isAiInterview ? false : (isCoding
                 ? (app.coding_score != null || COMPLETED_CODING_STAGES.includes(app.status))
-                : (app.mcq_score != null || COMPLETED_MCQ_STAGES.includes(app.status)))
+                : (app.mcq_score != null || COMPLETED_MCQ_STAGES.includes(app.status))))
             );
 
             const rawScore = attempt?.score ?? (isCoding ? app.coding_score : app.mcq_score);
@@ -477,8 +464,8 @@ export default function CandidateAssessmentsPage() {
               id: assignment.id,
               assessment_id: assignment.assessment_id,
               application_id: assignment.application_id,
-              title: tmpl?.title ?? (isCoding ? `${job?.title || "Coding"} Round` : `${job?.title || "MCQ"} Assessment`),
-              type: isCoding ? "coding" : "mcq",
+              title: tmpl?.title ?? (isAiInterview ? `${job?.title || "AI"} Interview` : isCoding ? `${job?.title || "Coding"} Round` : `${job?.title || "MCQ"} Assessment`),
+              type: itemType,
               duration_minutes: tmpl?.duration_minutes ? Number(tmpl.duration_minutes) : (isCoding ? 60 : 15),
               scheduled_start_at: assignment.scheduled_start_at || (isCoding ? job?.coding_scheduled_start_at : job?.mcq_scheduled_start_at) || null,
               expires_at: assignment.expires_at,
@@ -799,16 +786,16 @@ export default function CandidateAssessmentsPage() {
                   </Button>
                 </div>
               ) : ["zoom_interview"].includes(trackingGroup.applicationStatus) ? (
-                <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-blue-900 font-bold text-sm">
-                    <Video className="h-5 w-5 text-blue-600" /> Final Google Meet Round
+                <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5 space-y-3">
+                  <div className="flex items-center gap-2 text-indigo-900 font-bold text-sm">
+                    <Video className="h-5 w-5 text-indigo-600" /> Recruiter Final Interview (Native Video Room)
                   </div>
-                  <p className="text-xs text-blue-700 leading-relaxed font-medium">
-                    You have advanced to the final live human interview round with the hiring panel over Google Meet.
+                  <p className="text-xs text-indigo-700 leading-relaxed font-medium">
+                    You have advanced to the final live recruiter interview round inside SmartHire's secure native video meeting room.
                   </p>
                   <Link href="/candidate/interviews" className="block">
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-10 rounded-xl shadow-sm cursor-pointer flex items-center justify-center gap-2">
-                      <Video className="h-4 w-4" /> Enter Google Meet Room Overview
+                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-10 rounded-xl shadow-sm cursor-pointer flex items-center justify-center gap-2">
+                      <Video className="h-4 w-4" /> Enter SmartHire Interview Lobby
                     </Button>
                   </Link>
                 </div>

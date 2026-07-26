@@ -5,6 +5,7 @@ node_modules/
 # Next.js build and cache
 .next/
 out/
+.tmp/
 
 # Production build outputs
 dist/

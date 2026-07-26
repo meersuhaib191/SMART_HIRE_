@@ -3,8 +3,10 @@
 import * as React from "react";
 import {
   ClipboardCheck, Code2, Star, Award, Calendar,
-  Mail, Clock, ChevronRight, Zap, XCircle, RotateCcw, Maximize2
+  Mail, Clock, Zap, XCircle, RotateCcw, Maximize2
 } from "lucide-react";
+
+import { UnreadDot } from "@/components/shared/UnreadDot";
 
 export interface CandidateAppCard {
   id: string;
@@ -40,7 +42,9 @@ interface ApplicationCardProps {
   onReinstate?: (card: CandidateAppCard) => void;
   onFullScreen?: (card: CandidateAppCard) => void;
   onScheduleInterview?: (card: CandidateAppCard) => void;
+  onScheduleFinalInterview?: (card: CandidateAppCard) => void;
   nextStageName?: string;
+  isUnread?: boolean;
 }
 
 function MiniScoreBar({ value, max, color }: { value: number; max: number; color: string }) {
@@ -150,7 +154,9 @@ function ScoreBadge({ card }: { card: CandidateAppCard }) {
   }
 
   if (status === "interview") {
-    if (card.interview_avg_score != null) {
+    const scoreVal = card.interview_avg_score ?? (card as any).ai_interview_score ?? card.score ?? null;
+    if (scoreVal != null && Number(scoreVal) > 0) {
+      const displayPct = Math.min(100, Math.max(0, Math.round(Number(scoreVal))));
       const recMap: Record<string, { label: string; color: string; bg: string }> = {
         strong_hire: { label: "Strong Hire", color: "text-emerald-700", bg: "bg-emerald-100" },
         hire: { label: "Hire", color: "text-green-700", bg: "bg-green-100" },
@@ -163,17 +169,19 @@ function ScoreBadge({ card }: { card: CandidateAppCard }) {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-              <Star className="h-3 w-3 text-amber-500" /> Interview
+              <Star className="h-3 w-3 text-violet-500" /> AI Interview
             </span>
-            <span className="text-xs font-bold text-zinc-700">{card.interview_avg_score}/10</span>
+            <span className="text-xs font-black text-violet-700 bg-violet-50 px-2 py-0.5 rounded-md border border-violet-200">
+              {displayPct}%
+            </span>
           </div>
-          <div className="flex items-center justify-between pt-1">
-            {rec && (
+          {rec && (
+            <div className="flex items-center justify-between pt-1">
               <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${rec.bg} ${rec.color}`}>
                 {rec.label}
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       );
     }
@@ -200,6 +208,29 @@ function ScoreBadge({ card }: { card: CandidateAppCard }) {
     );
   }
 
+  if (status === "zoom_interview" || status === "recruiter_review" || status === "final_interview" || status === "interview_scheduled") {
+    const isScheduled = Boolean(card.interview_scheduled_at);
+    return (
+      <div className="space-y-1.5 text-left">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+            <Calendar className="h-3 w-3 text-indigo-600" /> Recruiter Final Interview
+          </span>
+          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${isScheduled ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>
+            {isScheduled ? "SCHEDULED" : "PENDING"}
+          </span>
+        </div>
+        {card.interview_scheduled_at && (
+          <div className="p-2 bg-indigo-50/70 border border-indigo-100 rounded-xl space-y-1">
+            <p className="text-[10px] font-bold text-indigo-900">
+              {new Date(card.interview_scheduled_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (status === "offered") {
     return (
       <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
@@ -220,9 +251,10 @@ const AVATAR_COLORS = [
   "from-rose-500 to-pink-600",
 ];
 
-export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstate, onFullScreen, onScheduleInterview, nextStageName }: ApplicationCardProps) {
+export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstate, onFullScreen, onScheduleInterview, onScheduleFinalInterview, nextStageName, isUnread }: ApplicationCardProps) {
   const isRejected = card.status === "rejected" || card.status === "withdrawn";
   const isOfferStage = ["offer_sent", "offered", "offer_accepted", "joined"].includes(card.status);
+  const isFinalInterviewStage = ["zoom_interview", "recruiter_review", "final_interview", "interview_scheduled"].includes(card.status);
 
   const getInitials = (name: string) => {
     const parts = name.trim().split(" ");
@@ -267,14 +299,20 @@ export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstat
       {/* Avatar + Name + Priority */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${avatarColor} text-white flex items-center justify-center text-[11px] font-bold shadow-sm shrink-0`}>
+          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${avatarColor} text-white flex items-center justify-center text-[11px] font-bold shadow-sm shrink-0 relative`}>
             {getInitials(card.candidate_name)}
+            {isUnread && (
+              <div className="absolute -top-1 -right-1">
+                <UnreadDot size="sm" />
+              </div>
+            )}
           </div>
           <div className="min-w-0">
-            <h4 className={`text-[13px] font-bold leading-tight truncate transition-colors ${
+            <h4 className={`text-[13px] font-bold leading-tight truncate transition-colors flex items-center gap-1.5 ${
               isRejected ? "text-zinc-500 line-through" : "text-zinc-900 group-hover:text-blue-700"
             }`}>
-              {card.candidate_name}
+              <span>{card.candidate_name}</span>
+              {isUnread && <UnreadDot size="sm" />}
             </h4>
             <span className="text-[11px] text-zinc-500 truncate block">
               {card.headline || "Applicant"}
@@ -317,6 +355,23 @@ export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstat
           {card.tags.length > 3 && (
             <span className="text-[9px] text-zinc-400 font-semibold self-center">+{card.tags.length - 3}</span>
           )}
+        </div>
+      )}
+
+      {/* Final Interview Card Action Button */}
+      {isFinalInterviewStage && onScheduleFinalInterview && !isRejected && (
+        <div className="pt-2 border-t border-zinc-100">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onScheduleFinalInterview(card);
+            }}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold h-7.5 rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+          >
+            <Calendar className="h-3.5 w-3.5" />
+            {card.interview_scheduled_at ? "Reschedule Final Interview" : "Schedule Final Interview"}
+          </button>
         </div>
       )}
 

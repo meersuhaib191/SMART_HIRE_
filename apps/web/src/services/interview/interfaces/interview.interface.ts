@@ -27,11 +27,12 @@ export type InterviewerStatus = "pending" | "confirmed" | "declined";
 export type RecommendationType =
   | "strong_hire"
   | "hire"
+  | "further_review"
   | "neutral"
   | "no_hire"
   | "strong_no_hire";
 
-export type MeetingProviderType = "google_meet" | "zoom" | "msteams";
+export type MeetingProviderType = "smarthire_native" | "google_meet" | "zoom" | "msteams";
 
 export interface Interview {
   id: string;
@@ -46,9 +47,16 @@ export interface Interview {
   endTime: string; // ISO datetime
   timezone: string;
   durationMinutes: number;
+  actualDurationMinutes?: number;
   instructions?: string;
   meetingProviderType: MeetingProviderType;
   meetingLink?: string;
+  meetingToken?: string;
+  focusNotes?: string;
+  recruiterNotes?: string;
+  candidateJoinedAt?: string;
+  recruiterJoinedAt?: string;
+  endedAt?: string;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -80,16 +88,24 @@ export interface Interviewer {
 export interface Scorecard {
   id: string;
   interviewId: string;
-  interviewerId: string;
-  recruiterId: string;
-  technicalScore?: number; // 1-5
-  communicationScore?: number; // 1-5
-  problemSolvingScore?: number; // 1-5
-  cultureFitScore?: number; // 1-5
-  confidenceLevel?: number; // 1-5
+  interviewerId?: string;
+  recruiterId?: string;
+  technicalScore?: number; // 1-100 or 1-5 (Role/Technical Competence - 35%)
+  problemSolvingScore?: number; // 1-100 or 1-5 (Problem Solving - 20%)
+  communicationScore?: number; // 1-100 or 1-5 (Communication - 15%)
+  experienceScore?: number; // 1-100 or 1-5 (Relevant Experience - 15%)
+  judgmentScore?: number; // 1-100 or 1-5 (Professional Judgment - 15%)
+  technicalNotes?: string;
+  problemSolvingNotes?: string;
+  communicationNotes?: string;
+  experienceNotes?: string;
+  judgmentNotes?: string;
+  cultureFitScore?: number;
+  confidenceLevel?: number;
   strengths?: string;
   weaknesses?: string;
   notes?: string;
+  overallScore?: number; // Calculated weighted score 0-100
   recommendation: RecommendationType;
   createdAt: string;
   updatedAt: string;
@@ -102,3 +118,4 @@ export interface InterviewEvent {
   payload: Record<string, unknown>;
   createdAt: string;
 }
+

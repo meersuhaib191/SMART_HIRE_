@@ -36,15 +36,12 @@ function CandidateAvatar({ name }: { name: string }) {
   );
 }
 
-function getGoogleMeetUrl(int: RecruiterInterviewItem): string {
-  if (int.meeting_link && int.meeting_link.startsWith("http")) {
+function getSmartHireRoomUrl(int: RecruiterInterviewItem): string {
+  if (int.meeting_link && !int.meeting_link.includes("google.com")) {
     return int.meeting_link;
   }
-  const cleanId = int.id.replace(/[^a-zA-Z]/g, "").toLowerCase().padEnd(10, "smarthire");
-  const p1 = cleanId.slice(0, 3);
-  const p2 = cleanId.slice(3, 7);
-  const p3 = cleanId.slice(7, 10);
-  return `https://meet.google.com/${p1}-${p2}-${p3}`;
+  const meetingToken = `smh_meet_${int.id.replace(/-/g, "")}`;
+  return `/interview/lobby/${meetingToken}`;
 }
 
 export default function RecruiterInterviewsPage() {
@@ -331,14 +328,12 @@ export default function RecruiterInterviewsPage() {
                         Audit AI Scorecard & Video →
                       </a>
 
-                      <a
-                        href={getGoogleMeetUrl(int)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 bg-[#0071E3] hover:bg-[#0051A3] text-white rounded-xl px-3.5 py-1.5 text-xs font-bold shadow-sm transition-all cursor-pointer"
+                      <Link
+                        href={getSmartHireRoomUrl(int)}
+                        className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-3.5 py-1.5 text-xs font-bold shadow-sm transition-all cursor-pointer"
                       >
-                        <Video className="h-3.5 w-3.5 text-emerald-300" /> Launch Google Meet
-                      </a>
+                        <Video className="h-3.5 w-3.5 text-emerald-300" /> Launch SmartHire Room
+                      </Link>
                     </div>
                   </div>
                 ))}

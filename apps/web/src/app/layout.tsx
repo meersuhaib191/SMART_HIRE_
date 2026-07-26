@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { NotificationProvider } from "@/providers/NotificationContext";
 
 export const metadata: Metadata = {
   title: "Smart Hire — Modern Hiring Platform",
@@ -15,8 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased bg-[#F5F5F7] text-[#1D1D1F]">
-        {children}
+        <NotificationProvider>{children}</NotificationProvider>
       </body>
     </html>
   );
 }
+

@@ -2,11 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Loader2, Calendar, ArrowRight, Clock, Sparkles, Briefcase, Trophy, CheckCircle2, Search, Filter, Play } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useNotifications } from "@/hooks/use-notifications";
+import { UnreadDot } from "@/components/shared/UnreadDot";
+import { Loader2, Calendar, ArrowRight, Clock, Sparkles, Briefcase, Trophy, CheckCircle2, Search, Filter, Play, LayoutDashboard } from "lucide-react";
 import { Button } from "@smarthire/ui";
 import { logger } from "@smarthire/logger";
 import { createBrowserClient } from "@supabase/ssr";
 import { isTechDomain } from "@/utils/domain-utils";
+import { resolveCandidateProfileIds } from "@/utils/candidate-helper";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -104,6 +108,7 @@ function StageProgressBar({ currentStatus, isTech = true }: { currentStatus: str
 }
 
 export default function CandidateApplicationsPage() {
+  const { hasUnreadForContext, markContextAsRead } = useNotifications();
   const [applications, setApplications] = React.useState<ActiveApplication[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -120,38 +125,14 @@ export default function CandidateApplicationsPage() {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (!authUser) return;
 
-        let { data: profile } = await supabase
-          .schema("candidate")
-          .from("candidates")
-          .select("id")
-          .eq("user_id", authUser.id)
-          .maybeSingle();
+        const candIds = await resolveCandidateProfileIds(supabase, authUser);
 
-        if (!profile) {
-          const { data: newProfile, error: insErr } = await supabase
-            .schema("candidate")
-            .from("candidates")
-            .insert({
-              user_id: authUser.id,
-              email: authUser.email || "",
-              first_name: authUser.user_metadata?.first_name || authUser.email?.split("@")[0] || "Candidate",
-              last_name: authUser.user_metadata?.last_name || "",
-              summary: "",
-              tags: ["React", "TypeScript"]
-            })
-            .select("id")
-            .single();
-
-          if (insErr) throw insErr;
-          profile = newProfile;
-        }
-
-        if (profile) {
+        if (candIds.length > 0) {
           const { data: apps, error } = await supabase
             .schema("application")
             .from("applications")
             .select("id, created_at, status, rejection_stage, job_id, score")
-            .eq("candidate_id", profile.id)
+            .in("candidate_id", candIds)
             .is("deleted_at", null)
             .order("created_at", { ascending: false });
 
@@ -167,7 +148,7 @@ export default function CandidateApplicationsPage() {
               .schema("assessment")
               .from("assignments")
               .select("id, application_id, assessment_id, status, scheduled_start_at, expires_at")
-              .eq("candidate_id", profile.id);
+              .in("candidate_id", candIds);
 
             const now = new Date();
 
@@ -309,25 +290,33 @@ export default function CandidateApplicationsPage() {
 
       {/* Applications List */}
       <div className="space-y-6">
-        {filteredApplications.map((app) => (
-          <div
-            key={app.id}
-            className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-all duration-200"
-          >
-            {/* Header Banner */}
-            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-white">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                  <Briefcase className="h-4.5 w-4.5 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">{app.job_title}</h3>
-                  <div className="flex items-center gap-2 text-xs text-white/80 font-medium mt-0.5">
-                    <Calendar className="h-3.5 w-3.5" />
-                    <span>Applied {new Date(app.created_at).toLocaleDateString([], { dateStyle: "medium" })}</span>
+        {filteredApplications.map((app) => {
+          const isUnread = hasUnreadForContext({ applicationId: app.id });
+          return (
+            <div
+              key={app.id}
+              onClick={() => {
+                if (isUnread) markContextAsRead({ applicationId: app.id });
+              }}
+              className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-all duration-200"
+            >
+              {/* Header Banner */}
+              <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                    <Briefcase className="h-4.5 w-4.5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <span>{app.job_title}</span>
+                      {isUnread && <UnreadDot size="sm" />}
+                    </h3>
+                    <div className="flex items-center gap-2 text-xs text-white/80 font-medium mt-0.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      <span>Applied {new Date(app.created_at).toLocaleDateString([], { dateStyle: "medium" })}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
               <div className="flex items-center gap-2">
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold capitalize backdrop-blur-sm border ${
@@ -510,7 +499,8 @@ export default function CandidateApplicationsPage() {
               </div>
             </div>
           </div>
-        ))}
+        );
+      })}
 
         {filteredApplications.length === 0 && (
           <div className="rounded-2xl border-2 border-dashed border-zinc-200 p-12 text-center text-zinc-500 italic text-sm">

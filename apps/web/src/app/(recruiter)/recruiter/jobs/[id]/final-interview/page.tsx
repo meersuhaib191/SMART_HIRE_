@@ -4,11 +4,11 @@ import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@smarthire/ui";
-import { ArrowLeft, Video, ChevronRight, BarChart3, Calendar, Clock, UserCheck, ExternalLink } from "lucide-react";
+import { ArrowLeft, Video, ChevronRight, BarChart3, Calendar, Clock, UserCheck, ExternalLink, Plus, Award, RefreshCw } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { createBrowserClient } from "@supabase/ssr";
-
-export const dynamic = "force-dynamic";
+import { ScheduleFinalInterviewModal } from "@/components/interview/ScheduleFinalInterviewModal";
+import { ScorecardModal } from "@/components/interview/ScorecardModal";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -16,7 +16,7 @@ const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 interface FinalInterviewCandidateItem {
-  id: string;
+  id: string; // application_id
   candidate_id: string;
   first_name: string;
   last_name: string;
@@ -24,8 +24,12 @@ interface FinalInterviewCandidateItem {
   avatar_url?: string;
   status: string;
   interview_scheduled_at: string | null;
+  interview_id?: string | null;
+  meeting_token?: string | null;
   meeting_link?: string | null;
   interview_avg_score: number | null;
+  interview_recommendation?: string | null;
+  duration_minutes?: number | null;
   created_at: string;
 }
 
@@ -34,9 +38,13 @@ export default function FinalInterviewDetailPage() {
   const router = useRouter();
   const jobId = params.id as string;
 
-  const [jobTitle, setJobTitle] = React.useState<string>("Job Opening");
+  const [jobTitle, setJobTitle] = React.useState<string>("Job Position");
   const [candidates, setCandidates] = React.useState<FinalInterviewCandidateItem[]>([]);
   const [loading, setLoading] = React.useState(true);
+
+  // Modals state
+  const [scheduleModalApp, setScheduleModalApp] = React.useState<FinalInterviewCandidateItem | null>(null);
+  const [scorecardModalApp, setScorecardModalApp] = React.useState<FinalInterviewCandidateItem | null>(null);
 
   const fetchFinalInterviewData = React.useCallback(async () => {
     setLoading(true);
@@ -51,11 +59,11 @@ export default function FinalInterviewDetailPage() {
 
       if (job?.title) setJobTitle(job.title);
 
-      // 2. Fetch Applications for this job in Recruiter Final Interview round
+      // 2. Fetch Applications in zoom_interview or subsequent stages
       const { data: apps } = await supabase
         .schema("application")
         .from("applications")
-        .select("id, candidate_id, status, interview_scheduled_at, interview_avg_score, created_at")
+        .select("id, candidate_id, status, interview_scheduled_at, interview_avg_score, interview_recommendation, created_at")
         .eq("job_id", jobId)
         .is("deleted_at", null);
 
@@ -72,8 +80,23 @@ export default function FinalInterviewDetailPage() {
         const candMap = new Map<string, any>();
         (cands || []).forEach((c) => candMap.set(c.id, c));
 
+        // Fetch interviews records
+        const appIds = appList.map((a) => a.id);
+        const { data: intRecords } = await supabase
+          .schema("interview")
+          .from("interviews")
+          .select("id, application_id, meeting_token, meeting_link, duration_minutes, start_time")
+          .in("application_id", appIds);
+
+        const intMap = new Map<string, any>();
+        (intRecords || []).forEach((i) => intMap.set(i.application_id, i));
+
         const mapped: FinalInterviewCandidateItem[] = appList.map((app) => {
           const c = candMap.get(app.candidate_id);
+          const i = intMap.get(app.id);
+          const meetingToken = i?.meeting_token || `smh_meet_${app.id.slice(0, 8)}`;
+          const nativeLink = `/interview/lobby/${meetingToken}`;
+
           return {
             id: app.id,
             candidate_id: app.candidate_id,
@@ -82,15 +105,21 @@ export default function FinalInterviewDetailPage() {
             email: c?.email || "No email provided",
             avatar_url: c?.avatar_url,
             status: app.status,
-            interview_scheduled_at: app.interview_scheduled_at,
-            meeting_link: "https://meet.google.com/smarthire-final-interview",
+            interview_scheduled_at: app.interview_scheduled_at || i?.start_time || null,
+            interview_id: i?.id || null,
+            meeting_token: meetingToken,
+            meeting_link: nativeLink,
             interview_avg_score: app.interview_avg_score,
+            interview_recommendation: app.interview_recommendation,
+            duration_minutes: i?.duration_minutes || 60,
             created_at: app.created_at,
           };
         });
 
-        // Filter candidates in Recruiter Final Interview round
-        const finalCandidates = mapped.filter((m) => m.status === "zoom_interview" || m.status === "recruiter_review" || ["offer_sent", "offered"].includes(m.status));
+        // Filter candidates for Recruiter Final Interview round
+        const finalCandidates = mapped.filter((m) =>
+          ["zoom_interview", "final_interview", "hiring_decision", "offer", "offer_sent", "offered", "hired", "joined"].includes(m.status)
+        );
         setCandidates(finalCandidates);
       } else {
         setCandidates([]);
@@ -108,13 +137,16 @@ export default function FinalInterviewDetailPage() {
 
   // Overview Metrics
   const totalCandidates = candidates.length;
-  const scheduledCount = candidates.filter((c) => c.interview_scheduled_at != null).length;
-  const completedList = candidates.filter((c) => c.interview_avg_score != null || ["offer_sent", "offered"].includes(c.status));
+  const scheduledCount = candidates.filter((c) => c.interview_scheduled_at != null && c.interview_avg_score == null).length;
+  const completedList = candidates.filter((c) => c.interview_avg_score != null || ["hiring_decision", "offer", "hired"].includes(c.status));
   const completedCount = completedList.length;
-  const pendingCount = Math.max(0, totalCandidates - completedCount);
+  const pendingCount = Math.max(0, totalCandidates - scheduledCount - completedCount);
+
+  const scores = completedList.map((c) => c.interview_avg_score).filter((s): s is number => s != null);
+  const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 py-6 px-4 sm:px-6 text-left sh-animate-in">
+    <div className="max-w-7xl mx-auto space-y-6 py-6 px-4 sm:px-6 text-left sh-animate-in">
       {/* Header & Breadcrumb */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-4">
         <div>
@@ -148,11 +180,15 @@ export default function FinalInterviewDetailPage() {
         </div>
       </div>
 
-      {/* Overview Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {/* Overview Metrics Toolbar */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-1 shadow-2xs">
           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Candidates</span>
           <span className="text-2xl font-black text-zinc-900">{totalCandidates}</span>
+        </div>
+        <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-1 shadow-2xs">
+          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Pending Scheduling</span>
+          <span className="text-2xl font-black text-amber-600">{pendingCount}</span>
         </div>
         <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-1 shadow-2xs">
           <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block">Scheduled</span>
@@ -163,37 +199,44 @@ export default function FinalInterviewDetailPage() {
           <span className="text-2xl font-black text-emerald-600">{completedCount}</span>
         </div>
         <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-1 shadow-2xs">
-          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Pending</span>
-          <span className="text-2xl font-black text-amber-600">{pendingCount}</span>
+          <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Average Score</span>
+          <span className="text-2xl font-black text-indigo-600">{avgScore != null ? `${avgScore}%` : "—"}</span>
         </div>
       </div>
 
       {/* Candidates Roster Table */}
       <div className="bg-white border border-zinc-200 rounded-3xl shadow-sm overflow-hidden">
         <div className="p-4 border-b border-zinc-100 flex items-center justify-between">
-          <h3 className="text-xs font-extrabold text-zinc-900 uppercase tracking-wider">Recruiter Final Interview Roster</h3>
+          <h3 className="text-xs font-extrabold text-zinc-900 uppercase tracking-wider">
+            Recruiter Final Interview Roster
+          </h3>
           <span className="text-xs font-medium text-zinc-500">{candidates.length} Candidates</span>
         </div>
 
         {loading ? (
-          <div className="p-12 text-center text-xs text-zinc-500 font-medium">Loading recruiter final interview roster...</div>
+          <div className="p-12 text-center text-xs text-zinc-500 font-medium">Loading final interview roster...</div>
         ) : candidates.length === 0 ? (
-          <div className="p-12 text-center text-xs text-zinc-400 font-medium italic">No candidates scheduled for recruiter final interview yet.</div>
+          <div className="p-12 text-center text-xs text-zinc-400 font-medium italic">
+            No candidates scheduled for recruiter final interview yet.
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">
                   <th className="p-3.5">Candidate</th>
+                  <th className="p-3.5">Interview Date & Time</th>
+                  <th className="p-3.5">Duration</th>
                   <th className="p-3.5">Status</th>
-                  <th className="p-3.5">Scheduled Date & Time</th>
-                  <th className="p-3.5">Meeting Link</th>
+                  <th className="p-3.5">Score & Rec.</th>
+                  <th className="p-3.5">SmartHire Meeting Room</th>
                   <th className="p-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {candidates.map((c) => {
-                  const isDone = c.interview_avg_score != null || ["offer_sent", "offered"].includes(c.status);
+                  const isDone = c.interview_avg_score != null || ["hiring_decision", "offer", "hired"].includes(c.status);
+                  const isScheduled = Boolean(c.interview_scheduled_at);
 
                   return (
                     <tr key={c.id} className="hover:bg-zinc-50/80 transition-colors">
@@ -203,43 +246,85 @@ export default function FinalInterviewDetailPage() {
                           <span className="block text-[10px] text-zinc-400 font-normal">{c.email}</span>
                         </div>
                       </td>
+                      <td className="p-3.5 font-medium text-zinc-600">
+                        {c.interview_scheduled_at ? (
+                          new Date(c.interview_scheduled_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })
+                        ) : (
+                          <span className="text-amber-600 font-bold">Not Scheduled</span>
+                        )}
+                      </td>
+                      <td className="p-3.5 font-medium text-zinc-600">
+                        {c.duration_minutes} mins
+                      </td>
                       <td className="p-3.5">
                         <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
                           isDone
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : c.interview_scheduled_at
+                            : isScheduled
                             ? "bg-blue-50 text-blue-700 border border-blue-200"
                             : "bg-amber-50 text-amber-700 border border-amber-200"
                         }`}>
-                          {isDone ? "Completed" : c.interview_scheduled_at ? "Scheduled" : "Pending"}
+                          {isDone ? "Completed" : isScheduled ? "Scheduled" : "Pending"}
                         </span>
                       </td>
-                      <td className="p-3.5 font-medium text-zinc-600">
-                        {c.interview_scheduled_at ? new Date(c.interview_scheduled_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "Not scheduled"}
-                      </td>
-                      <td className="p-3.5">
-                        {c.meeting_link ? (
-                          <a
-                            href={c.meeting_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-blue-600 font-bold hover:underline text-[11px]"
-                          >
-                            Open Meeting <ExternalLink className="h-3 w-3" />
-                          </a>
+                      <td className="p-3.5 font-bold">
+                        {c.interview_avg_score != null ? (
+                          <div>
+                            <span className="text-emerald-600 text-sm font-black">{c.interview_avg_score}%</span>
+                            {c.interview_recommendation && (
+                              <span className="block text-[10px] font-extrabold text-zinc-500 uppercase">
+                                {c.interview_recommendation.replace("_", " ")}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-zinc-400 font-medium italic">—</span>
                         )}
                       </td>
-                      <td className="p-3.5 text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => router.push(`/recruiter/candidates/${c.candidate_id}`)}
-                          className="text-[11px] font-bold h-7.5 px-3 border-zinc-300"
-                        >
-                          Record Decision
-                        </Button>
+                      <td className="p-3.5">
+                        {c.meeting_link ? (
+                          <Link
+                            href={c.meeting_link}
+                            className="inline-flex items-center gap-1.5 text-indigo-600 font-extrabold hover:underline text-[11px] bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-100"
+                          >
+                            <Video className="h-3.5 w-3.5" /> Launch Room
+                          </Link>
+                        ) : (
+                          <span className="text-zinc-400 italic">—</span>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-right space-x-2">
+                        {!isScheduled && !isDone && (
+                          <Button
+                            size="sm"
+                            onClick={() => setScheduleModalApp(c)}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold h-7.5 px-3 shadow-xs"
+                          >
+                            Schedule
+                          </Button>
+                        )}
+
+                        {isScheduled && !isDone && (
+                          <Link href={c.meeting_link || "#"}>
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold h-7.5 px-3 shadow-xs"
+                            >
+                              Join Interview
+                            </Button>
+                          </Link>
+                        )}
+
+                        {isDone && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setScorecardModalApp(c)}
+                            className="text-[11px] font-bold h-7.5 px-3 border-zinc-300"
+                          >
+                            <Award className="h-3.5 w-3.5 text-indigo-600" /> View Evaluation
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -249,6 +334,37 @@ export default function FinalInterviewDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Schedule Final Interview Modal */}
+      {scheduleModalApp && (
+        <ScheduleFinalInterviewModal
+          isOpen={Boolean(scheduleModalApp)}
+          onClose={() => setScheduleModalApp(null)}
+          onSuccess={() => {
+            setScheduleModalApp(null);
+            fetchFinalInterviewData();
+          }}
+          applicationId={scheduleModalApp.id}
+          candidateName={`${scheduleModalApp.first_name} ${scheduleModalApp.last_name}`}
+          candidateEmail={scheduleModalApp.email}
+          jobTitle={jobTitle}
+        />
+      )}
+
+      {/* Scorecard Evaluation View Modal */}
+      {scorecardModalApp && (
+        <ScorecardModal
+          isOpen={Boolean(scorecardModalApp)}
+          onClose={() => setScorecardModalApp(null)}
+          onSuccess={() => {
+            setScorecardModalApp(null);
+            fetchFinalInterviewData();
+          }}
+          interviewId={scorecardModalApp.interview_id || scorecardModalApp.id}
+          candidateName={`${scorecardModalApp.first_name} ${scorecardModalApp.last_name}`}
+          jobTitle={jobTitle}
+        />
+      )}
     </div>
   );
 }

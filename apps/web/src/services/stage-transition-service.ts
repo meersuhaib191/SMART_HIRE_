@@ -1,6 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { logger } from "@smarthire/logger";
-import { notificationService } from "@/services/notification-service";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -24,7 +23,7 @@ const STAGE_NOTIFICATION_MAP: Record<string, { type: string; subject: string; te
   screening: {
     type: "STAGE_SCREENING",
     subject: "Application Moved to Screening",
-    template: (title) => `The application deadline has ended and your application for ${title} has moved to ATS Screening.`,
+    template: (title) => `Your application for ${title} has moved to ATS Screening.`,
   },
   mcq: {
     type: "STAGE_MCQ",
@@ -43,18 +42,38 @@ const STAGE_NOTIFICATION_MAP: Record<string, { type: string; subject: string; te
   },
   zoom_interview: {
     type: "STAGE_RECRUITER_INTERVIEW",
-    subject: "Final Interview Scheduled",
+    subject: "Recruiter Final Interview Scheduled",
     template: (title) => `Your application for ${title} has progressed to the Recruiter Final Interview round.`,
   },
+  hiring_decision: {
+    type: "STAGE_HIRING_DECISION",
+    subject: "Final Interview Completed",
+    template: (title) => `Your Recruiter Final Interview for ${title} is complete and under final hiring review.`,
+  },
+  offer: {
+    type: "STAGE_OFFER",
+    subject: "Job Offer Received",
+    template: (title) => `An official employment offer letter is now available for your application to ${title}.`,
+  },
   offer_sent: {
-    type: "STAGE_SELECTED",
-    subject: "Congratulations — Selected",
-    template: (title) => `Congratulations! Your application for ${title} has been selected for hire.`,
+    type: "STAGE_OFFER",
+    subject: "Job Offer Received",
+    template: (title) => `An official employment offer letter is now available for your application to ${title}.`,
   },
   offered: {
-    type: "STAGE_OFFER_AVAILABLE",
-    subject: "Offer Available",
+    type: "STAGE_OFFER",
+    subject: "Job Offer Available",
     template: (title) => `An official employment offer letter is now available for your application to ${title}.`,
+  },
+  hired: {
+    type: "STAGE_HIRED",
+    subject: "Congratulations — Hired!",
+    template: (title) => `Congratulations! You have been officially hired for ${title}. Welcome aboard!`,
+  },
+  joined: {
+    type: "STAGE_JOINED",
+    subject: "Onboarding & Joining Confirmed",
+    template: (title) => `Welcome to the team! Your joining process for ${title} is confirmed.`,
   },
   rejected: {
     type: "STAGE_REJECTED",
@@ -121,7 +140,7 @@ export const stageTransitionService = {
         logger.warn("[StageTransitionService] Status history log failed", histErr);
       }
 
-      // 4. Generate Candidate Notification (Idempotent)
+      // 4. Generate Candidate Notification via DomainEventService (Idempotent)
       try {
         // Fetch candidate user ID
         const { data: cand } = await candClient
@@ -140,26 +159,14 @@ export const stageTransitionService = {
           .maybeSingle();
 
         const jobTitle = job?.title || "Job Position";
-        const notifSpec = STAGE_NOTIFICATION_MAP[params.destinationStage] || {
-          type: "STAGE_UPDATE",
-          subject: "Application Progress Update",
-          template: (t: string) => `Your application for ${t} has progressed to the ${params.destinationStage} stage.`,
-        };
 
-        const idempotencyKey = `notif_stage_${app.id}_${params.destinationStage}`;
-
-        await notificationService.createNotification({
-          userId: candidateUserId,
-          type: notifSpec.type,
-          subject: notifSpec.subject,
-          body: notifSpec.template(jobTitle),
-          metadata: {
-            applicationId: app.id,
-            jobId: app.job_id,
-            previousStage,
-            destinationStage: params.destinationStage,
-          },
-          idempotencyKey,
+        const { DomainEventService } = await import("@/services/notification/domain-event-service");
+        await DomainEventService.notifyStageChanged({
+          candidateUserId,
+          applicationId: app.id,
+          jobId: app.job_id,
+          jobTitle,
+          newStage: params.destinationStage,
         });
       } catch (notifErr) {
         logger.error("[StageTransitionService] Error triggering stage notification", notifErr);

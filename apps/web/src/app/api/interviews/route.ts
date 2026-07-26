@@ -48,23 +48,33 @@ export async function POST(request: NextRequest) {
     const intSupabase = await createInterviewClient();
     const appSupabase = await createAppClient();
 
-    // 1. Resolve authentic company_id to satisfy RLS policies
+    // 1. Resolve authentic company_id & candidate_id to satisfy RLS policies
     const { data: targetApp } = await appSupabase
       .from("applications")
-      .select("id, job_id, company_id")
+      .select("id, job_id, candidate_id")
       .eq("id", applicationId)
       .maybeSingle();
 
-    let activeCompanyId = targetApp?.company_id;
+    let activeCompanyId: string | null | undefined = null;
 
-    if (!activeCompanyId) {
-      const { data: recData } = await supabase
-        .schema("organization")
-        .from("recruiters")
+    // Try recruiter table first
+    const { data: recData } = await supabase
+      .schema("organization")
+      .from("recruiters")
+      .select("company_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    activeCompanyId = recData?.company_id;
+
+    // Fallback: resolve company_id from the job itself
+    if (!activeCompanyId && targetApp?.job_id) {
+      const { data: jobData } = await supabase
+        .schema("job")
+        .from("jobs")
         .select("company_id")
-        .eq("user_id", user.id)
+        .eq("id", targetApp.job_id)
         .maybeSingle();
-      activeCompanyId = recData?.company_id;
+      activeCompanyId = jobData?.company_id;
     }
 
     // Invalidate/expire any prior interview links for this candidate application upon rescheduling
@@ -78,36 +88,41 @@ export async function POST(request: NextRequest) {
       // Safe fallback
     }
 
-    // Generate Secure Google Meet Link if human interview, or set AI Lobby marker
-    const rawMeetCode = `smh-${Math.random().toString(36).slice(2, 5)}-${Math.random().toString(36).slice(2, 6)}`;
+    // Generate Secure SmartHire Native Meeting Token & Link
+    const meetingToken = `smh_meet_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const finalMeetLink = isAiInterview
       ? undefined
-      : (meetingLink || `https://meet.google.com/${rawMeetCode}`);
+      : `/interview/lobby/${meetingToken}`;
 
     const formattedInstructions = [
-      isAiInterview ? "🤖 AI Video Interview Round (Candidate Browser AI Lobby)" : `📹 Google Meet Link: ${finalMeetLink}`,
+      isAiInterview ? "🤖 AI Video Interview Round (Candidate Browser AI Lobby)" : `📹 SmartHire Native Video Interview Room: ${finalMeetLink}`,
       templateFileName ? `Interview Question Template PDF: ${templateFileName}` : null,
       notes,
     ].filter(Boolean).join("\n\n");
 
     const meetingTitle = isAiInterview
-      ? "AI Video Interview Round (Browser AI Lobby)"
-      : (interviewerName ? `Google Meet Interview with ${interviewerName}` : "Recruiter Final Google Meet Interview");
+      ? "AI Video Interview Round"
+      : (interviewerName ? `Recruiter Final Interview with ${interviewerName}` : "Recruiter Final Interview");
 
     // 2. Create interview record in interview.interviews schema
     let interviewRecord: Record<string, any> | null = null;
     const insertPayload: Record<string, any> = {
       application_id: applicationId,
+      candidate_id: targetApp?.candidate_id,
       meeting_title: meetingTitle,
       reference_number: refNum,
-      type: isAiInterview ? "AI_Video_Interview" : "Technical",
+      type: isAiInterview ? "AI_Video_Interview" : "Final Round",
       status: "scheduled",
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
       timezone: "Asia/Kolkata",
       duration_minutes: Number(durationMinutes),
+      meeting_provider_type: "smarthire_native",
       meeting_link: finalMeetLink,
+      meeting_token: meetingToken,
+      focus_notes: notes || undefined,
       instructions: formattedInstructions,
+      created_by: user.id,
     };
 
     if (activeCompanyId) {
@@ -126,21 +141,25 @@ export async function POST(request: NextRequest) {
       interviewRecord = createdInt;
     }
 
-    // 3. Update application status in application.applications schema to enable AI Lobby on candidate portal
-    await applicationService.updateStatus(applicationId, user.id, {
-      status: appTargetStatus,
-      notes: isAiInterview ? "Scheduled AI Video Interview (AI Lobby Enabled)" : `Scheduled Google Meet interview: ${finalMeetLink}`,
-    }).catch(async (serviceErr) => {
+    // 3. Update application status and interview_scheduled_at in application.applications schema
+    try {
+      await applicationService.updateStatus(applicationId, user.id, {
+        status: appTargetStatus,
+        notes: isAiInterview ? "Scheduled AI Video Interview" : `Scheduled Recruiter Final Interview (SmartHire Native Room)`,
+      });
+    } catch (serviceErr) {
       logger.warn("[API/Interviews] applicationService updateStatus fallback", serviceErr);
-      await appSupabase
-        .from("applications")
-        .update({
-          status: appTargetStatus,
-          interview_scheduled_at: startTime.toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", applicationId);
-    });
+    }
+
+    // Always ensure interview_scheduled_at is persisted on the application row
+    await appSupabase
+      .from("applications")
+      .update({
+        status: appTargetStatus,
+        interview_scheduled_at: startTime.toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", applicationId);
 
     logger.info(`[API/Interviews] ${interviewType} successfully scheduled for application ${applicationId}`);
     return NextResponse.json({

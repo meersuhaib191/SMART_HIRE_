@@ -20,11 +20,15 @@ import {
   X,
 } from "lucide-react";
 
+import { useNotifications } from "@/hooks/use-notifications";
+import { UnreadDot } from "@/components/shared/UnreadDot";
+
 /* ─── Types ─────────────────────────────────────────────────── */
 interface NavLink {
   label: string;
   href: string;
   icon: React.ElementType;
+  category?: "pipeline" | "jobs" | "offers" | "admin" | "applications";
 }
 
 /* ─── Data ───────────────────────────────────────────────────── */
@@ -35,13 +39,13 @@ const adminLinks: NavLink[] = [
   { label: "Companies", href: "/admin/companies", icon: Building2 },
   { label: "All Jobs", href: "/admin/jobs", icon: FileSpreadsheet },
   { label: "Applications", href: "/admin/applications", icon: Layers },
-  { label: "Security & Admin", href: "/admin/security", icon: Settings2 },
+  { label: "Security & Admin", href: "/admin/security", icon: Settings2, category: "admin" },
 ];
 
 const recruiterLinks: NavLink[] = [
   { label: "Dashboard", href: "/recruiter/dashboard", icon: LayoutDashboard },
-  { label: "Jobs", href: "/recruiter/jobs", icon: Briefcase },
-  { label: "Pipeline", href: "/recruiter/pipeline", icon: Layers },
+  { label: "Jobs", href: "/recruiter/jobs", icon: Briefcase, category: "jobs" },
+  { label: "Pipeline", href: "/recruiter/pipeline", icon: Layers, category: "pipeline" },
   { label: "Candidates", href: "/recruiter/candidates", icon: FileSpreadsheet },
   { label: "Hiring History", href: "/recruiter/history", icon: History },
 ];
@@ -52,6 +56,7 @@ export function Sidebar() {
   const isAdmin = pathname.startsWith("/admin");
   const links = isAdmin ? adminLinks : recruiterLinks;
   const workspaceName = isAdmin ? "Admin Console" : "Recruiter Console";
+  const { hasUnreadForContext } = useNotifications();
 
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -124,19 +129,23 @@ export function Sidebar() {
                       link.href !== "/admin/dashboard" &&
                       pathname.startsWith(link.href));
                   const Icon = link.icon;
+                  const isUnread = link.category ? hasUnreadForContext({ category: link.category }) : false;
 
                   return (
                     <Link
                       key={link.label}
                       href={link.href}
-                      className={`flex items-center gap-3 rounded-[12px] px-3.5 py-3 text-xs font-bold transition-all ${
+                      className={`flex items-center justify-between rounded-[12px] px-3.5 py-3 text-xs font-bold transition-all ${
                         isActive
                           ? "bg-[#0071E3] text-white shadow-sm"
                           : "text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
                       }`}
                     >
-                      <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? "text-white" : "text-[#AEAEB2]"}`} />
-                      <span>{link.label}</span>
+                      <div className="flex items-center gap-3">
+                        <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? "text-white" : "text-[#AEAEB2]"}`} />
+                        <span>{link.label}</span>
+                      </div>
+                      {isUnread && <UnreadDot size="sm" />}
                     </Link>
                   );
                 })}
@@ -186,6 +195,7 @@ export function Sidebar() {
                 link.href !== "/admin/dashboard" &&
                 pathname.startsWith(link.href));
             const Icon = link.icon;
+            const isUnread = link.category ? hasUnreadForContext({ category: link.category }) : false;
 
             return (
               <Link
@@ -195,7 +205,7 @@ export function Sidebar() {
                 className={`
                   group flex items-center gap-3 rounded-[12px] px-3 py-[10px] text-[13px] font-medium
                   transition-all duration-150
-                  ${collapsed ? "justify-center" : ""}
+                  ${collapsed ? "justify-center" : "justify-between"}
                   ${
                     isActive
                       ? "bg-[#0071E3] text-white shadow-sm"
@@ -203,12 +213,15 @@ export function Sidebar() {
                   }
                 `}
               >
-                <Icon
-                  className={`shrink-0 transition-colors ${
-                    collapsed ? "h-[18px] w-[18px]" : "h-[16px] w-[16px]"
-                  } ${isActive ? "text-white" : "text-[#AEAEB2] group-hover:text-[#1D1D1F]"}`}
-                />
-                {!collapsed && <span className="truncate">{link.label}</span>}
+                <div className="flex items-center gap-3 min-w-0">
+                  <Icon
+                    className={`shrink-0 transition-colors ${
+                      collapsed ? "h-[18px] w-[18px]" : "h-[16px] w-[16px]"
+                    } ${isActive ? "text-white" : "text-[#AEAEB2] group-hover:text-[#1D1D1F]"}`}
+                  />
+                  {!collapsed && <span className="truncate">{link.label}</span>}
+                </div>
+                {isUnread && <UnreadDot size="sm" />}
               </Link>
             );
           })}

@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Loader2, Calendar, Video, Clock, Briefcase, Search, Filter, CheckCircle2, Trophy, Lock } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { createBrowserClient } from "@supabase/ssr";
+import { resolveCandidateProfileIds } from "@/utils/candidate-helper";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -12,6 +14,7 @@ const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
 interface CandidateInterview {
   id: string;
+  assignment_id?: string;
   interview_type: string;
   status: string;
   scheduled_at: string | null;
@@ -33,25 +36,76 @@ export default function CandidateInterviewsPage() {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (!authUser) { setLoading(false); return; }
 
-        // Get candidate profile id
-        const { data: prof } = await supabase
-          .schema("candidate")
-          .from("candidates")
-          .select("id")
-          .eq("user_id", authUser.id)
-          .maybeSingle();
+        const candIdList = await resolveCandidateProfileIds(supabase, authUser);
 
-        if (!prof?.id) { setLoading(false); return; }
+        // Fetch interviews via SECURITY DEFINER RPC
+        let rows: any[] = [];
+        for (const cid of candIdList) {
+          const { data: rpcRows } = await supabase.rpc("get_candidate_interviews", {
+            p_candidate_id: cid,
+          });
+          if (Array.isArray(rpcRows)) {
+            rpcRows.forEach((r) => {
+              if (!rows.some((existing) => existing.id === r.id)) {
+                rows.push(r);
+              }
+            });
+          }
+        }
 
-        // Fetch interviews via SECURITY DEFINER RPC (bypasses cross-schema RLS on interview.interviews)
-        const { data: rows, error: rpcErr } = await supabase.rpc("get_candidate_interviews", {
-          p_candidate_id: prof.id,
-        });
+        // Direct schema fallback by candidate applications
+        let candAppsQuery = supabase
+          .schema("application")
+          .from("applications")
+          .select("id, job_id, status, interview_scheduled_at, candidate_id")
+          .is("deleted_at", null);
 
-        if (rpcErr) {
-          logger.error("Failed to load candidate interviews schedule", rpcErr);
-          setLoading(false);
-          return;
+        if (candIdList.length > 0) {
+          candAppsQuery = candAppsQuery.in("candidate_id", candIdList);
+        }
+
+        const { data: candApps } = await candAppsQuery;
+
+        if (candApps && candApps.length > 0) {
+          const appIds = candApps.map((a) => a.id);
+          const { data: directInts } = await supabase
+            .schema("interview")
+            .from("interviews")
+            .select("*")
+            .in("application_id", appIds);
+
+          const existingIds = new Set(rows.map((r: any) => r.id));
+          (directInts || []).forEach((di: any) => {
+            if (!existingIds.has(di.id)) {
+              rows.push({
+                ...di,
+                source: "scheduled",
+                scheduled_at: di.start_time,
+              });
+            }
+          });
+
+          // Also check for candidate applications currently in final interview stage
+          candApps.forEach((ca) => {
+            if (["zoom_interview", "final_interview"].includes(ca.status)) {
+              const appMatch = rows.find((r) => r.application_id === ca.id);
+              if (!appMatch) {
+                const meetingToken = `smh_meet_${ca.id.slice(0, 8)}`;
+                rows.push({
+                  id: `app_int_${ca.id}`,
+                  application_id: ca.id,
+                  job_id: ca.job_id,
+                  meeting_title: "Recruiter Final Interview",
+                  meeting_token: meetingToken,
+                  meeting_link: `/interview/lobby/${meetingToken}`,
+                  start_time: ca.interview_scheduled_at || null,
+                  duration_minutes: 60,
+                  status: "scheduled",
+                  source: "scheduled",
+                });
+              }
+            }
+          });
         }
 
         // Fetch template duration map from assessments tables (schema assessment + public)
@@ -69,6 +123,30 @@ export default function CandidateInterviewsPage() {
           .select("id, duration_minutes");
         (tmplPublicList || []).forEach((t: any) => {
           if (t.duration_minutes) templateDurationMap.set(t.id, Number(t.duration_minutes));
+        });
+
+        // Fetch candidate assignments for AI interview assignment ID resolution
+        let candAssignments: any[] = [];
+        if (candIdList.length > 0) {
+          const { data: assignmentsData } = await supabase
+            .schema("assessment")
+            .from("assignments")
+            .select("id, application_id, assessment_id")
+            .in("candidate_id", candIdList);
+          candAssignments = assignmentsData || [];
+        }
+
+        // Build application→job mapping for rows missing job_id
+        const appJobMap = new Map<string, string>();
+        (candApps || []).forEach((ca) => {
+          if (ca.job_id) appJobMap.set(ca.id, ca.job_id);
+        });
+
+        // Enrich rows with job_id from applications if missing
+        rows.forEach((r: any) => {
+          if (!r.job_id && r.application_id && appJobMap.has(r.application_id)) {
+            r.job_id = appJobMap.get(r.application_id);
+          }
         });
 
         // Fetch job titles for all job_ids returned
@@ -90,13 +168,28 @@ export default function CandidateInterviewsPage() {
             const tmplDuration = r.assessment_id ? templateDurationMap.get(r.assessment_id) : undefined;
             const finalDuration = tmplDuration || (r.duration_minutes ? Number(r.duration_minutes) : 60);
 
+            // Find matching assignment if available
+            const matchingAssignment = (candAssignments || []).find(
+              (a: any) => a.id === r.id || (r.application_id && a.application_id === r.application_id)
+            );
+
+            const meetingToken = r.meeting_token || `smh_meet_${r.id}`;
+            const nativeLink = (r.meeting_link && !r.meeting_link.includes("google.com"))
+              ? r.meeting_link
+              : `/interview/lobby/${meetingToken}`;
+
+            const cleanTitle = (r.meeting_title || r.type || "Recruiter Final Interview")
+              .replace(/Google Meet Interview/gi, "Recruiter Final Interview")
+              .replace(/Google Meet/gi, "SmartHire Native Video");
+
             return {
               id: r.id,
-              interview_type: r.meeting_title || r.type || "AI Technical Interview",
+              assignment_id: matchingAssignment?.id,
+              interview_type: cleanTitle,
               status: r.status || "scheduled",
               scheduled_at: r.start_time || null,
               duration_minutes: finalDuration,
-              meeting_link: r.meeting_link || undefined,
+              meeting_link: nativeLink,
               job_title: job?.title || "Software Engineering Position",
               source: r.source || "scheduled",
             };
@@ -277,13 +370,18 @@ export default function CandidateInterviewsPage() {
                           {getStatusBadge(round.status)}
                         </div>
                         <div className="flex items-center gap-3 text-xs text-zinc-500 font-medium flex-wrap">
-                          {round.scheduled_at ? (
+                          {round.status.toLowerCase() === "completed" ? (
+                            <div className="flex items-center gap-1.5 text-emerald-600 font-bold">
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                              <span>Interview Completed</span>
+                            </div>
+                          ) : round.scheduled_at ? (
                             <div className="flex items-center gap-1.5">
                               <Calendar className="h-3.5 w-3.5 shrink-0 text-blue-500" />
                               <span>{new Date(round.scheduled_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1.5 text-violet-600">
+                            <div className="flex items-center gap-1.5 text-violet-600 font-bold">
                               <Video className="h-3.5 w-3.5 shrink-0" />
                               <span>Available now · Start when ready</span>
                             </div>
@@ -298,47 +396,32 @@ export default function CandidateInterviewsPage() {
 
                       <div className="shrink-0">
                         {round.status.toLowerCase() === "completed" ? (
-                          <span className="inline-flex items-center gap-1.5 text-emerald-600 text-xs font-bold bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200">
-                            <CheckCircle2 className="h-4 w-4" /> Completed
-                          </span>
+                          isAI ? (
+                            <a
+                              href={`/candidate/ai-interview/${round.assignment_id || round.id}/exam`}
+                              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2 text-xs font-bold h-9 shadow-sm transition-all cursor-pointer"
+                            >
+                              <CheckCircle2 className="h-4 w-4" /> View Evaluation Result
+                            </a>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-emerald-600 text-xs font-bold bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200">
+                              <CheckCircle2 className="h-4 w-4" /> Completed
+                            </span>
+                          )
                         ) : isAI ? (
                           <a
-                            href={`/candidate/ai-interview/${round.id}/exam`}
+                            href={`/candidate/ai-interview/${round.assignment_id || round.id}/exam`}
                             className="inline-flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl px-4 py-2 text-xs font-bold h-9 shadow-sm transition-all"
                           >
                             <Video className="h-4 w-4" /> Start Gemini Live Interview
                           </a>
                         ) : round.meeting_link ? (
-                          (() => {
-                            const scheduledMs = round.scheduled_at ? new Date(round.scheduled_at).getTime() : 0;
-                            const diffMins = scheduledMs ? (scheduledMs - Date.now()) / (1000 * 60) : 0;
-                            const isTooEarly = diffMins > 10;
-
-                            if (isTooEarly) {
-                              const minsLeft = Math.ceil(diffMins);
-                              return (
-                                <button
-                                  disabled
-                                  title="Google Meet room opens 10 minutes before scheduled start time"
-                                  className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl px-3.5 py-2 text-xs font-bold h-9 cursor-not-allowed shadow-2xs"
-                                >
-                                  <Lock className="h-3.5 w-3.5 text-amber-500" />
-                                  <span>Opens in {minsLeft > 60 ? `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m` : `${minsLeft}m`}</span>
-                                </button>
-                              );
-                            }
-
-                            return (
-                              <a
-                                href={round.meeting_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2 text-xs font-bold h-9 shadow-sm transition-all"
-                              >
-                                <Video className="h-4 w-4 text-emerald-300" /> Enter Google Meet
-                              </a>
-                            );
-                          })()
+                          <Link
+                            href={round.meeting_link}
+                            className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-2 text-xs font-bold h-9 shadow-sm transition-all cursor-pointer"
+                          >
+                            <Video className="h-4 w-4 text-emerald-300" /> Enter SmartHire Room
+                          </Link>
                         ) : (
                           <button
                             disabled

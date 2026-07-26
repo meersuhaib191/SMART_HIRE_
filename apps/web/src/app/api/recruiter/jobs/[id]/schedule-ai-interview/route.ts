@@ -67,7 +67,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    const companyId = job.company_id || recruiterProfile?.company_id;
+    const companyId = job?.company_id || recruiterProfile?.company_id;
 
     if (!companyId) {
       return NextResponse.json({ error: "Company organization ID not found for this job posting" }, { status: 400 });
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           title: assessmentTitle,
           description: effectiveFocusTopics
             ? `Focus Topics: ${effectiveFocusTopics}`
-            : `Real-time conversational AI Technical Interview for ${job.title}`,
+            : `Real-time conversational AI Technical Interview for ${job?.title || "Position"}`,
           duration_minutes: effectiveDurationMinutes,
           passing_percentage: 60,
           status: "published",
@@ -154,39 +154,50 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const assignmentsCreated: string[] = [];
 
     for (const app of targetApplications) {
-      // Delete previous attempt if rescheduling so candidate can re-appear
+      // Find existing assignments for this application
       const { data: prevAssignments } = await assessmentClient
         .from("assignments")
         .select("id")
-        .eq("application_id", app.id)
-        .eq("assessment_id", finalAssessmentId);
+        .eq("application_id", app.id);
 
       if (prevAssignments && prevAssignments.length > 0) {
         for (const pAssign of prevAssignments) {
+          // Delete old attempt records so rescheduled interview starts clean
           await assessmentClient
             .from("attempts")
             .delete()
             .eq("assignment_id", pAssign.id);
+
+          // Reset existing assignment to assigned
+          await assessmentClient
+            .from("assignments")
+            .update({
+              company_id: companyId,
+              assessment_id: finalAssessmentId,
+              candidate_id: app.candidate_id,
+              status: "assigned",
+              scheduled_start_at: scheduledStartAt ? new Date(scheduledStartAt).toISOString() : new Date().toISOString(),
+              attempts_count: 0,
+            })
+            .eq("id", pAssign.id);
         }
-      }
+      } else {
+        // Insert new assignment record if none existed
+        const { error: assignErr } = await assessmentClient
+          .from("assignments")
+          .insert({
+            company_id: companyId,
+            assessment_id: finalAssessmentId,
+            application_id: app.id,
+            candidate_id: app.candidate_id,
+            status: "assigned",
+            scheduled_start_at: scheduledStartAt ? new Date(scheduledStartAt).toISOString() : new Date().toISOString(),
+            attempts_count: 0,
+          });
 
-      // Upsert assignment record
-      const { error: assignErr } = await assessmentClient
-        .from("assignments")
-        .upsert({
-          company_id: companyId,
-          assessment_id: finalAssessmentId,
-          application_id: app.id,
-          candidate_id: app.candidate_id,
-          status: "assigned",
-          scheduled_start_at: scheduledStartAt ? new Date(scheduledStartAt).toISOString() : new Date().toISOString(),
-          attempts_count: 0,
-        })
-        .select("id")
-        .maybeSingle();
-
-      if (assignErr) {
-        logger.warn(`[Schedule AI Interview] Assignment upsert warning for app ${app.id}`, assignErr);
+        if (assignErr) {
+          logger.warn(`[Schedule AI Interview] Assignment insert warning for app ${app.id}`, assignErr);
+        }
       }
 
       assignmentsCreated.push(app.id);
@@ -199,6 +210,29 @@ export async function POST(request: NextRequest, context: RouteContext) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", app.id);
+
+      // Trigger candidate domain notification
+      try {
+        const { data: cand } = await appClient
+          .schema("candidate")
+          .from("candidates")
+          .select("user_id")
+          .eq("id", app.candidate_id)
+          .maybeSingle();
+
+        const candidateUserId = cand?.user_id || app.candidate_id;
+        const { DomainEventService } = await import("@/services/notification/domain-event-service");
+        await DomainEventService.notifyAssessmentScheduled({
+          candidateUserId,
+          applicationId: app.id,
+          jobId,
+          jobTitle: job?.title || "Job Position",
+          assessmentType: "ai_interview",
+          scheduledStartAt: scheduledStartAt || new Date().toISOString(),
+        });
+      } catch (notifErr) {
+        logger.error("[Schedule AI Interview] Failed to send notification", notifErr);
+      }
     }
 
     logger.info(`[Schedule AI Interview] Scheduled ${assignmentsCreated.length} candidates for Job ${jobId} (Duration: ${effectiveDurationMinutes}m)`);

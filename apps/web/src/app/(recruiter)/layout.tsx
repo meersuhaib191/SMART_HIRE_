@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Header } from "@/components/shared/header";
 import { Sidebar } from "@/components/shared/sidebar";
+import { RecruiterMeetingNotifier } from "@/components/recruiter/RecruiterMeetingNotifier";
 
 interface RecruiterLayoutProps {
   children: React.ReactNode;
@@ -16,6 +17,7 @@ export default function RecruiterLayout({ children }: RecruiterLayoutProps) {
           {children}
         </main>
       </div>
+      <RecruiterMeetingNotifier />
     </div>
   );
 }

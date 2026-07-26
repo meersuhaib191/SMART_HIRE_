@@ -44,91 +44,277 @@ export interface StructuredInterviewEvaluation {
   }>;
 }
 
-function getApiKey(): string | null {
-  const key =
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_AI_KEY ||
-    process.env.GEMINI_KEY;
-  return key && key.trim().length > 0 ? key.trim() : null;
+
+
+export type AnswerQuality = "meaningful" | "partial" | "irrelevant" | "no_response" | "candidate_requested_repeat";
+
+export function classifyAnswerQuality(text?: string | null): AnswerQuality {
+  if (!text || typeof text !== "string") return "no_response";
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return "no_response";
+
+  const lower = trimmed.toLowerCase();
+  const noRespMarkers = [
+    "no verbal response provided",
+    "(no verbal response provided)",
+    "no response",
+    "no answer",
+    "silence",
+    "none",
+    "null",
+  ];
+  if (noRespMarkers.some((m) => lower === m || lower.includes("no verbal response"))) {
+    return "no_response";
+  }
+
+  const repeatMarkers = ["repeat", "can you repeat", "could you repeat", "pardon", "say that again"];
+  if (repeatMarkers.some((m) => lower.includes(m))) {
+    return "candidate_requested_repeat";
+  }
+
+  const fillers = ["thank you", "thanks", "yes", "yeah", "okay", "ok", "hmmm", "hmm", "i don't know", "idk", "thank you i was working in"];
+  if (fillers.includes(lower) || trimmed.length < 15) {
+    return "partial";
+  }
+
+  if (trimmed.length < 35) {
+    return "partial";
+  }
+
+  return "meaningful";
+}
+
+export interface TurnProcessInput {
+  jobTitle: string;
+  jobDescription: string;
+  candidateName: string;
+  candidateResumeText?: string;
+  focusTopics?: string;
+  durationMinutes: number;
+  remainingMinutes: number;
+  currentQuestion: string;
+  candidateAnswer: string;
+  recentTranscriptSummary?: string;
+  questionNumber: number;
+  askedQuestionTexts?: string[];
+  consecutiveNoResponses?: number;
+}
+
+export interface TurnProcessResult {
+  answerQuality: AnswerQuality;
+  answerEvidence: {
+    competency: string;
+    summary: string;
+    evidenceStrength: "strong" | "moderate" | "insufficient" | "no_response";
+  };
+  nextAction: "question" | "conclude";
+  nextQuestion?: {
+    text: string;
+    competency: string;
+    isFollowUp: boolean;
+  };
 }
 
 export class LiveInterviewService {
   /**
-   * Generates a short-lived Ephemeral Access Token from Google Gemini API
-   * for secure browser-to-Gemini Live WebSocket streaming without exposing the master API key.
+   * Generates ONLY the opening Question 1 dynamically via server-side Gemini REST call.
    */
-  static async createEphemeralToken(durationMinutes = 60): Promise<string> {
-    const masterKey = getApiKey();
-    if (!masterKey) {
-      throw new Error("GEMINI_API_KEY is not configured server-side.");
-    }
+  static async generateOpeningQuestion(params: {
+    jobTitle: string;
+    jobDescription: string;
+    candidateName: string;
+    candidateResumeText?: string;
+    focusTopics?: string;
+    durationMinutes: number;
+  }): Promise<{ questionText: string; competency: string }> {
+    const focus = params.focusTopics ? `\nRECRUITER FOCUS TOPICS:\n${params.focusTopics}` : "";
+    const resume = params.candidateResumeText ? `\nCANDIDATE RESUME HIGHLIGHTS:\n${params.candidateResumeText.slice(0, 1500)}` : "";
+
+    const prompt = `You are Alex, an expert Senior AI Technical Interviewer for SmartHire.
+Generate ONLY the FIRST opening question to start a ${params.durationMinutes}-minute professional interview for ${params.candidateName} applying for ${params.jobTitle}.
+
+### JOB DESCRIPTION:
+${params.jobDescription.slice(0, 2000)}
+${focus}
+${resume}
+
+INSTRUCTIONS:
+1. Greet ${params.candidateName} warmly in 1 short sentence as Alex from SmartHire.
+2. Ask ONE clear, engaging role-relevant question (either about their relevant background project or a core technical/conceptual skill required by the JD).
+3. Do NOT ask multiple questions at once.
+
+Return valid JSON strictly matching:
+{
+  "questionText": "Hello ${params.candidateName}! Welcome to your interview for ${params.jobTitle}. To start us off, tell me...",
+  "competency": "role_knowledge"
+}`;
 
     try {
-      // Call Google Gemini Ephemeral Access Token endpoint
-      const response = await fetch("https://generativelanguage.googleapis.com/v1alpha/tokens", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": masterKey,
-        },
-        body: JSON.stringify({
-          validityDurationSeconds: Math.min( durationMinutes * 60 + 300, 7200 ),
-          uses: 100,
-        }),
+      const res = await generateStructuredGeminiResponse<{ questionText: string; competency: string }>({
+        prompt,
+        timeoutMs: 10000,
+        temperature: 0.3,
       });
 
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        logger.warn(`[LiveInterviewService] Ephemeral token API returned HTTP ${response.status}: ${errText.slice(0, 200)}`);
-        // Fallback: If ephemeral token API is restricted or not enabled on key, return masterKey securely for server-proxied WebSocket session initialization
-        return masterKey;
+      if (res.success && res.data?.questionText) {
+        return {
+          questionText: res.data.questionText,
+          competency: res.data.competency || "role_knowledge",
+        };
+      }
+    } catch (err) {
+      logger.warn("[LiveInterviewService] Opening question LLM generation warning", err);
+    }
+
+    return {
+      questionText: `Hello ${params.candidateName}! Welcome to your AI Technical Interview for the ${params.jobTitle} position. To start us off, could you briefly walk me through your background and the technical projects most relevant to this role?`,
+      competency: "role_knowledge",
+    };
+  }
+
+  /**
+   * Processes a single candidate answer turn using ONE server-side REST Gemini request.
+   * Handles no-response / silence deterministically without praise.
+   * Prevents duplicate questions.
+   */
+  static async processInterviewTurn(input: TurnProcessInput): Promise<TurnProcessResult> {
+    const quality = classifyAnswerQuality(input.candidateAnswer);
+    const askedTexts = input.askedQuestionTexts || [];
+
+    // Early conclusion if remaining time low, max questions reached, or 3 consecutive no-responses
+    if (input.remainingMinutes <= 1 || input.questionNumber >= 10 || (input.consecutiveNoResponses || 0) >= 2) {
+      return {
+        answerQuality: quality,
+        answerEvidence: {
+          competency: "general",
+          summary: quality === "no_response" ? "No candidate response provided." : "Candidate provided final response.",
+          evidenceStrength: quality === "no_response" ? "no_response" : "moderate",
+        },
+        nextAction: "conclude",
+      };
+    }
+
+    // Deterministic fast-path for silence / no-response (saves Gemini latency & cost, uses neutral transition)
+    if (quality === "no_response") {
+      const fallbackQuestions = [
+        `I didn't receive a response. Let's move to our next area: in your software engineering work, how do you approach diagnosing complex bugs in production?`,
+        `I didn't hear an answer, so let's continue. Can you describe a key technical project you led and the architecture choices you made?`,
+        `No response recorded. Let's move forward: how do you evaluate technical trade-offs between speed of delivery and system scalability?`,
+      ];
+
+      // Pick a non-duplicate question
+      let nextQ = fallbackQuestions[input.questionNumber % fallbackQuestions.length];
+      const prevNormalized = askedTexts.map((t) => t.toLowerCase().trim());
+      if (prevNormalized.includes(nextQ.toLowerCase().trim())) {
+        nextQ = `I didn't receive a response. Let's move forward: how do you collaborate with your engineering team when technical opinions differ on a release?`;
       }
 
-      const data = await response.json();
-      return data.name || data.token || masterKey;
-    } catch (err) {
-      logger.warn("[LiveInterviewService] Error obtaining ephemeral token, using key fallback", err);
-      return masterKey;
+      return {
+        answerQuality: "no_response",
+        answerEvidence: {
+          competency: "general",
+          summary: "No response provided by candidate.",
+          evidenceStrength: "no_response",
+        },
+        nextAction: "question",
+        nextQuestion: {
+          text: nextQ,
+          competency: "problem_solving",
+          isFollowUp: false,
+        },
+      };
     }
+
+    const focus = input.focusTopics ? `\nRECRUITER FOCUS TOPICS:\n${input.focusTopics}` : "";
+    const resume = input.candidateResumeText ? `\nCANDIDATE RESUME:\n${input.candidateResumeText.slice(0, 1000)}` : "";
+    const askedListStr = askedTexts.length > 0 ? `\nPREVIOUSLY ASKED QUESTIONS (DO NOT REPEAT ANY OF THESE):\n${askedTexts.map((q, i) => `${i + 1}. "${q}"`).join("\n")}` : "";
+
+    const prompt = `You are Alex, an expert AI Technical Interviewer conducting a turn-based interview for ${input.jobTitle}.
+
+### JOB CONTEXT:
+${input.jobDescription.slice(0, 1800)}
+${focus}
+${resume}
+
+### INTERVIEW STATE:
+- Current Question #${input.questionNumber}: "${input.currentQuestion}"
+- Candidate Answer: "${input.candidateAnswer.slice(0, 2000)}"
+- Answer Quality: ${quality}
+- Remaining Time: ${input.remainingMinutes} minutes remaining out of ${input.durationMinutes} minutes total.
+${askedListStr}
+
+INSTRUCTIONS:
+1. Analyze candidate's answer for evidence strength (strong | moderate | insufficient | no_response).
+2. Generate ONE next adaptive question. Do NOT repeat any previously asked question.
+3. If candidate's answer was partial, ask a single relevant follow-up. If meaningful, transition with a brief "Thank you" and move to the next competency.
+
+Return valid JSON strictly matching:
+{
+  "answerEvidence": {
+    "competency": "technical",
+    "summary": "Candidate explained...",
+    "evidenceStrength": "${quality === "meaningful" ? "strong" : "moderate"}"
+  },
+  "nextAction": "question",
+  "nextQuestion": {
+    "text": "Thank you. Moving to system architecture: how would you handle...",
+    "competency": "problem_solving",
+    "isFollowUp": false
+  }
+}`;
+
+    try {
+      const res = await generateStructuredGeminiResponse<TurnProcessResult>({
+        prompt,
+        timeoutMs: 12000,
+        temperature: 0.2,
+      });
+
+      if (res.success && res.data?.nextQuestion?.text) {
+        // Validate question is not a duplicate
+        const newText = res.data.nextQuestion.text.trim();
+        const isDuplicate = askedTexts.some((prev) => prev.toLowerCase().trim() === newText.toLowerCase());
+
+        if (!isDuplicate) {
+          return {
+            answerQuality: quality,
+            answerEvidence: res.data.answerEvidence || {
+              competency: "technical",
+              summary: "Candidate responded.",
+              evidenceStrength: "moderate",
+            },
+            nextAction: res.data.nextAction || "question",
+            nextQuestion: res.data.nextQuestion,
+          };
+        }
+      }
+    } catch (err) {
+      logger.warn("[LiveInterviewService] Process turn LLM warning", err);
+    }
+
+    // Non-duplicate fallback question
+    const defaultCompetencies = ["technical_competence", "problem_solving", "applied_experience", "professional_judgment"];
+    const nextComp = defaultCompetencies[input.questionNumber % defaultCompetencies.length];
+
+    return {
+      answerQuality: quality,
+      answerEvidence: {
+        competency: nextComp,
+        summary: "Candidate provided response.",
+        evidenceStrength: "moderate",
+      },
+      nextAction: "question",
+      nextQuestion: {
+        text: `Thank you for sharing that. Let's move to our next area: in your production experience for ${input.jobTitle}, how do you approach testing and validating complex changes before deployment?`,
+        competency: nextComp,
+        isFollowUp: false,
+      },
+    };
   }
 
   /**
-   * Constructs controlled System Prompt for Gemini Live session based on Job Description & Candidate Resume.
-   */
-  static buildInterviewSystemPrompt(params: LiveInterviewContextParams): string {
-    const duration = params.durationMinutes || 60;
-
-    return `You are Alex, an expert Senior Technical Interviewer for SmartHire. You are conducting a LIVE, spoken, interactive technical and professional interview with the candidate, ${params.candidateName}.
-
-### YOUR ROLE & CONVERSATIONAL STYLE:
-- Act like a real, professional, encouraging human interviewer.
-- Ask ONE clear, focused question at a time.
-- Listen carefully to the candidate's voice answers.
-- Ask 0 to 2 natural, relevant follow-up questions when an answer is interesting, missing technical detail, or requires clarification.
-- Adapt the difficulty naturally: if the candidate answers well, explore deeper; if they struggle, move politely to the next topic.
-- NEVER give away the answer, teach the topic, or reveal scoring criteria during the interview.
-- Do NOT interrogate or spend more than 5 minutes on a single answer.
-
-### TARGET JOB CONTEXT:
-Job Position: ${params.jobTitle}
-Job Description & Requirements:
-${params.jobDescription.slice(0, 3000)}
-
-### CANDIDATE RESUME SUMMARY:
-${(params.candidateResumeText || "No resume uploaded. Interview based on JD requirements.").slice(0, 2000)}
-
-### TIME BUDGET STRATEGY (${duration} MINUTES TOTAL):
-1. Introduction & Welcome (1-2 mins): Introduce yourself warmly, state the interview structure, and ask the first question.
-2. Core Technical Competencies (~${Math.round(duration * 0.5)} mins): Evaluate 3-4 core technical skills explicitly listed in the Job Description.
-3. Applied Experience & Problem Solving (~${Math.round(duration * 0.3)} mins): Explore past projects or technical trade-offs.
-4. Professional Judgment & Conclusion (~${Math.round(duration * 0.15)} mins): Ask a behavioural scenario and wrap up professionally.
-
-Begin the interview now by introducing yourself as Alex from SmartHire and asking the first question related to ${params.jobTitle}.`;
-  }
-
-  /**
-   * Evaluates the completed interview transcript deterministically using Gemini Service.
-   * Produces structured rubric scores (0-100) and question-by-question evidence.
+   * Evaluates the completed interview transcript strictly based on demonstrated evidence.
+   * ABSOLUTELY NO FAKE / FALLBACK 75% SCORES. NO EVIDENCE = NO CREDIT (0%).
    */
   static async evaluateTranscript(params: {
     jobTitle: string;
@@ -137,109 +323,227 @@ Begin the interview now by introducing yourself as Alex from SmartHire and askin
     durationMinutes: number;
     timeSpentSeconds: number;
   }): Promise<StructuredInterviewEvaluation> {
-    const formattedTranscript = params.transcript
+    const rawTurns = params.transcript || [];
+    const formattedTranscript = rawTurns
       .map((t) => `[${t.timeFormatted}] ${t.speaker.toUpperCase()}: ${t.text}`)
       .join("\n");
 
+    // Count answer qualities across candidate turns
+    const candidateTurns = rawTurns.filter((t) => t.speaker === "candidate");
+    const totalQuestionsAsked = rawTurns.filter((t) => t.speaker === "interviewer").length;
+
+    let meaningfulCount = 0;
+    let partialCount = 0;
+    let noResponseCount = 0;
+
+    const questionReviews: Array<{
+      topic: string;
+      question: string;
+      candidateAnswer: string;
+      answerQuality: AnswerQuality;
+      followUps: string[];
+      evidence: string;
+      score: number;
+    }> = [];
+
+    // Analyze each turn pair
+    for (let i = 0; i < rawTurns.length; i++) {
+      if (rawTurns[i].speaker === "interviewer") {
+        const qText = rawTurns[i].text;
+        const nextTurn = rawTurns[i + 1];
+        const candidateText = (nextTurn && nextTurn.speaker === "candidate") ? nextTurn.text : null;
+        const qQuality = classifyAnswerQuality(candidateText);
+
+        if (qQuality === "meaningful") meaningfulCount++;
+        else if (qQuality === "partial") partialCount++;
+        else if (qQuality === "no_response") noResponseCount++;
+
+        const turnScore = qQuality === "meaningful" ? 80 : qQuality === "partial" ? 30 : 0;
+        const turnEv = qQuality === "no_response"
+          ? "No response provided by candidate."
+          : qQuality === "partial"
+          ? "Candidate provided partial/incomplete answer without detailed reasoning."
+          : "Candidate provided substantive answer.";
+
+        questionReviews.push({
+          topic: `Question ${questionReviews.length + 1}`,
+          question: qText,
+          candidateAnswer: candidateText || "(No verbal response provided)",
+          answerQuality: qQuality,
+          followUps: [],
+          evidence: turnEv,
+          score: turnScore,
+        });
+      }
+    }
+
+    // STRICT MINIMUM EVIDENCE CHECK: If candidate provided almost no substantive answers
+    const hasInsufficientEvidence = meaningfulCount === 0 && partialCount <= 1;
+
+    if (hasInsufficientEvidence) {
+      logger.info(`[LiveInterviewService] Insufficient evidence detected (Meaningful: ${meaningfulCount}, Partial: ${partialCount}, NoResponse: ${noResponseCount}). Returning strict 0% result.`);
+
+      return {
+        technicalCompetence: { score: 0, evidenceStatus: "insufficient_evidence", evidence: [], reasoning: "No assessable technical response provided." },
+        problemSolving: { score: 0, evidenceStatus: "insufficient_evidence", evidence: [], reasoning: "No response provided for problem-solving questions." },
+        communication: { score: partialCount > 0 ? 10 : 0, evidenceStatus: partialCount > 0 ? "limited_evidence" : "insufficient_evidence", evidence: partialCount > 0 ? ["Candidate spoke brief introductory phrase but did not complete technical answers."] : [], reasoning: "Insufficient sustained response to evaluate communication clarity." },
+        appliedExperience: { score: 0, evidenceStatus: "insufficient_evidence", evidence: [], reasoning: "No candidate project or work experience demonstrated." },
+        professionalJudgment: { score: 0, evidenceStatus: "insufficient_evidence", evidence: [], reasoning: "No response provided for professional judgment questions." },
+        overallScore: partialCount > 0 ? 2 : 0,
+        passed: false,
+        evaluationStatus: "insufficient_evidence",
+        meaningfulAnswersCount: meaningfulCount,
+        partialAnswersCount: partialCount,
+        unansweredCount: noResponseCount,
+        totalQuestionsAsked,
+        strengths: [],
+        developmentAreas: [
+          "Provide complete, substantive responses to interview questions so technical and problem-solving competencies can be evaluated.",
+          "Elaborate on production experience and technical trade-offs.",
+        ],
+        summary: "Insufficient interview evidence was provided by the candidate to evaluate role competencies.",
+        questionReviews,
+      };
+    }
+
+    // Execute Gemini evidence-based evaluation call
     const prompt = `You are an executive hiring panel evaluator analyzing a completed technical AI Interview transcript.
+
+CRITICAL MANDATORY EVALUATION RULES:
+1. NO EVIDENCE = NO CREDIT. Evaluate ONLY demonstrated evidence explicitly present in candidate answers.
+2. Do NOT infer skills from job title, resume, expectations, or assumptions.
+3. No response provides 0 credit.
+4. Do NOT manufacture default or fake 70-80% scores when evidence is weak or missing.
+5. Do NOT output generic positive filler strengths like "Demonstrated role-relevant competence". If candidate showed no strengths, return an empty array [].
+6. Output 0 for any competency where the candidate provided no assessable evidence.
 
 ### JOB CONTEXT:
 Target Position: ${params.jobTitle}
 Job Description:
-${params.jobDescription.slice(0, 2500)}
+${params.jobDescription.slice(0, 2000)}
 
 ### COMPLETE INTERVIEW TRANSCRIPT:
 ${formattedTranscript.slice(0, 8000)}
 
-### EVALUATION RUBRIC (0 to 100 Score for each dimension):
-1. Technical Competence (Weight: 40%): Depth of technical knowledge required by the Job Description.
-2. Problem Solving & Reasoning (Weight: 20%): Ability to diagnose issues, explain trade-offs, and justify technical choices.
-3. Communication Clarity (Weight: 15%): Structured, relevant, and clear explanations. Do NOT evaluate accent, grammar variations, or pitch.
-4. Applied Experience (Weight: 15%): Ability to connect real project experience to practical situations.
-5. Professional Judgment (Weight: 10%): Collaboration, ownership, and decision-making.
-
-Return ONLY valid JSON matching this schema:
+Return ONLY valid JSON strictly matching:
 {
-  "technicalCompetence": { "score": 85, "evidence": ["Quoted candidate answer 1"], "reasoning": "Explanation..." },
-  "problemSolving": { "score": 80, "evidence": ["Quoted candidate answer 2"], "reasoning": "Explanation..." },
-  "communication": { "score": 88, "evidence": ["Quoted candidate answer 3"], "reasoning": "Explanation..." },
-  "appliedExperience": { "score": 82, "evidence": ["Quoted candidate answer 4"], "reasoning": "Explanation..." },
-  "professionalJudgment": { "score": 80, "evidence": ["Quoted candidate answer 5"], "reasoning": "Explanation..." },
-  "strengths": ["Clear explanation of SQL joins", "Strong applied experience in Node.js"],
-  "developmentAreas": ["Could quantify project outcomes with specific metrics"],
-  "summary": "Candidate demonstrated strong technical competence and clear communication.",
-  "questionReviews": [
-    {
-      "topic": "SQL & Data Extraction",
-      "question": "Tell me about your experience with SQL joins.",
-      "candidateAnswer": "I have used INNER and LEFT JOINs in PostgreSQL...",
-      "followUps": ["How did you handle large dataset aggregation?"],
-      "evidence": "Accurately explained join mechanics and indexing.",
-      "score": 88
-    }
-  ]
+  "technicalCompetence": { "score": 0, "evidenceStatus": "insufficient_evidence", "evidence": [], "reasoning": "Explanation..." },
+  "problemSolving": { "score": 0, "evidenceStatus": "insufficient_evidence", "evidence": [], "reasoning": "Explanation..." },
+  "communication": { "score": 0, "evidenceStatus": "insufficient_evidence", "evidence": [], "reasoning": "Explanation..." },
+  "appliedExperience": { "score": 0, "evidenceStatus": "insufficient_evidence", "evidence": [], "reasoning": "Explanation..." },
+  "professionalJudgment": { "score": 0, "evidenceStatus": "insufficient_evidence", "evidence": [], "reasoning": "Explanation..." },
+  "strengths": [],
+  "developmentAreas": ["Specific growth area based on observed response gaps"],
+  "summary": "Evidence-backed evaluation summary..."
 }`;
 
-    const res = await generateStructuredGeminiResponse<any>({
-      prompt,
-      timeoutMs: 15000,
-      temperature: 0.1,
-    });
+    try {
+      const res = await generateStructuredGeminiResponse<any>({
+        prompt,
+        timeoutMs: 15000,
+        temperature: 0.1,
+      });
 
-    const d = res.data || {};
+      const d = res.data || {};
 
-    const clamp = (val: any, def = 70) => {
-      const num = Number(val);
-      return isNaN(num) ? def : Math.min(100, Math.max(0, Math.round(num)));
-    };
+      // STRICT SCORE CLAMP WITH DEFAULT 0 (NEVER 75/70/80!)
+      const clampScore = (val: any) => {
+        const num = Number(val);
+        return isNaN(num) ? 0 : Math.min(100, Math.max(0, Math.round(num)));
+      };
 
-    const techScore = clamp(d.technicalCompetence?.score, 75);
-    const probScore = clamp(d.problemSolving?.score, 70);
-    const commScore = clamp(d.communication?.score, 80);
-    const expScore = clamp(d.appliedExperience?.score, 75);
-    const judgScore = clamp(d.professionalJudgment?.score, 75);
+      const techScore = clampScore(d.technicalCompetence?.score);
+      const probScore = clampScore(d.problemSolving?.score);
+      const commScore = clampScore(d.communication?.score);
+      const expScore = clampScore(d.appliedExperience?.score);
+      const judgScore = clampScore(d.professionalJudgment?.score);
 
-    // Weighted Overall Score (40% Tech, 20% Prob, 15% Comm, 15% Exp, 10% Judg)
-    const overallScore = Math.round(
-      techScore * 0.40 +
-      probScore * 0.20 +
-      commScore * 0.15 +
-      expScore * 0.15 +
-      judgScore * 0.10
-    );
+      // SmartHire Server-Calculated Weighted Score (40% Tech, 20% Prob, 15% Comm, 15% Exp, 10% Judg)
+      const overallScore = Math.round(
+        techScore * 0.40 +
+        probScore * 0.20 +
+        commScore * 0.15 +
+        expScore * 0.15 +
+        judgScore * 0.10
+      );
 
-    return {
-      technicalCompetence: {
-        score: techScore,
-        evidence: Array.isArray(d.technicalCompetence?.evidence) ? d.technicalCompetence.evidence : [],
-        reasoning: d.technicalCompetence?.reasoning || "Technical competence evaluated against job description requirements.",
-      },
-      problemSolving: {
-        score: probScore,
-        evidence: Array.isArray(d.problemSolving?.evidence) ? d.problemSolving.evidence : [],
-        reasoning: d.problemSolving?.reasoning || "Problem solving & technical reasoning evaluated.",
-      },
-      communication: {
-        score: commScore,
-        evidence: Array.isArray(d.communication?.evidence) ? d.communication.evidence : [],
-        reasoning: d.communication?.reasoning || "Communication clarity and response structure evaluated.",
-      },
-      appliedExperience: {
-        score: expScore,
-        evidence: Array.isArray(d.appliedExperience?.evidence) ? d.appliedExperience.evidence : [],
-        reasoning: d.appliedExperience?.reasoning || "Applied project and work experience evaluated.",
-      },
-      professionalJudgment: {
-        score: judgScore,
-        evidence: Array.isArray(d.professionalJudgment?.evidence) ? d.professionalJudgment.evidence : [],
-        reasoning: d.professionalJudgment?.reasoning || "Professional judgment and collaboration evaluated.",
-      },
-      overallScore,
-      passed: overallScore >= 60,
-      strengths: Array.isArray(d.strengths) ? d.strengths : ["Demonstrated role-relevant competence."],
-      developmentAreas: Array.isArray(d.developmentAreas) ? d.developmentAreas : ["Provide more quantitative project metrics."],
-      summary: d.summary || "AI Interview completed and evaluated.",
-      questionReviews: Array.isArray(d.questionReviews) ? d.questionReviews : [],
-    };
+      const passed = overallScore >= 60 && meaningfulCount >= Math.ceil(totalQuestionsAsked * 0.5);
+
+      const getEvStatus = (sc: number, rawEv: string): "sufficient_evidence" | "limited_evidence" | "insufficient_evidence" => {
+        if (rawEv === "sufficient_evidence" || rawEv === "limited_evidence" || rawEv === "insufficient_evidence") {
+          return rawEv;
+        }
+        return sc >= 60 ? "sufficient_evidence" : sc >= 20 ? "limited_evidence" : "insufficient_evidence";
+      };
+
+      const cleanStrengths = Array.isArray(d.strengths)
+        ? d.strengths.filter((s: string) => s && !s.toLowerCase().includes("role-relevant competence") && !s.toLowerCase().includes("demonstrated role"))
+        : [];
+
+      return {
+        technicalCompetence: {
+          score: techScore,
+          evidenceStatus: getEvStatus(techScore, d.technicalCompetence?.evidenceStatus),
+          evidence: Array.isArray(d.technicalCompetence?.evidence) ? d.technicalCompetence.evidence : [],
+          reasoning: d.technicalCompetence?.reasoning || "Technical competence evaluated strictly from demonstrated answer evidence.",
+        },
+        problemSolving: {
+          score: probScore,
+          evidenceStatus: getEvStatus(probScore, d.problemSolving?.evidenceStatus),
+          evidence: Array.isArray(d.problemSolving?.evidence) ? d.problemSolving.evidence : [],
+          reasoning: d.problemSolving?.reasoning || "Problem solving evaluated strictly from demonstrated answer evidence.",
+        },
+        communication: {
+          score: commScore,
+          evidenceStatus: getEvStatus(commScore, d.communication?.evidenceStatus),
+          evidence: Array.isArray(d.communication?.evidence) ? d.communication.evidence : [],
+          reasoning: d.communication?.reasoning || "Communication clarity evaluated from transcript response structure.",
+        },
+        appliedExperience: {
+          score: expScore,
+          evidenceStatus: getEvStatus(expScore, d.appliedExperience?.evidenceStatus),
+          evidence: Array.isArray(d.appliedExperience?.evidence) ? d.appliedExperience.evidence : [],
+          reasoning: d.appliedExperience?.reasoning || "Applied experience evaluated from demonstrated candidate project examples.",
+        },
+        professionalJudgment: {
+          score: judgScore,
+          evidenceStatus: getEvStatus(judgScore, d.professionalJudgment?.evidenceStatus),
+          evidence: Array.isArray(d.professionalJudgment?.evidence) ? d.professionalJudgment.evidence : [],
+          reasoning: d.professionalJudgment?.reasoning || "Professional judgment evaluated from scenario responses.",
+        },
+        overallScore,
+        passed,
+        evaluationStatus: "completed",
+        meaningfulAnswersCount: meaningfulCount,
+        partialAnswersCount: partialCount,
+        unansweredCount: noResponseCount,
+        totalQuestionsAsked,
+        strengths: cleanStrengths,
+        developmentAreas: Array.isArray(d.developmentAreas) ? d.developmentAreas : ["Provide more quantitative project metrics and detailed code reasoning."],
+        summary: d.summary || "AI Interview evidence evaluation completed.",
+        questionReviews,
+      };
+    } catch (err) {
+      logger.error("[LiveInterviewService] Evaluation error", err);
+      // DO NOT RETURN 75% PASSED ON ERROR! Return failed evaluation status.
+      return {
+        technicalCompetence: { score: 0, evidenceStatus: "insufficient_evidence", evidence: [], reasoning: "Evaluation processing failed." },
+        problemSolving: { score: 0, evidenceStatus: "insufficient_evidence", evidence: [], reasoning: "Evaluation processing failed." },
+        communication: { score: 0, evidenceStatus: "insufficient_evidence", evidence: [], reasoning: "Evaluation processing failed." },
+        appliedExperience: { score: 0, evidenceStatus: "insufficient_evidence", evidence: [], reasoning: "Evaluation processing failed." },
+        professionalJudgment: { score: 0, evidenceStatus: "insufficient_evidence", evidence: [], reasoning: "Evaluation processing failed." },
+        overallScore: 0,
+        passed: false,
+        evaluationStatus: "failed",
+        meaningfulAnswersCount: meaningfulCount,
+        partialAnswersCount: partialCount,
+        unansweredCount: noResponseCount,
+        totalQuestionsAsked,
+        strengths: [],
+        developmentAreas: ["Interview evaluation temporarily failed and will be retried."],
+        summary: "Evaluation processing encountered an error and requires retry.",
+        questionReviews,
+      };
+    }
   }
 }

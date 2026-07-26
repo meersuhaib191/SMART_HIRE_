@@ -4,6 +4,8 @@ import { candidateService } from "@/services/candidate-service";
 import { resumeService } from "@/services/resume-service";
 import { logger } from "@smarthire/logger";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET: Retrieve list of resumes for candidate
  */

@@ -14,11 +14,13 @@ import {
   Play,
   Clock,
   Sparkles,
+  LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@smarthire/ui";
 import { logger } from "@smarthire/logger";
 import { createBrowserClient } from "@supabase/ssr";
 import { AtsCalculatorCard } from "@/components/dashboard/AtsCalculatorCard";
+import { resolveCandidateProfileIds } from "@/utils/candidate-helper";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -67,18 +69,28 @@ export default function CandidateDashboardPage() {
     const fetchDashboardMetrics = async () => {
       setLoading(true);
       try {
-        const { data: cand } = await supabase
-          .schema("candidate")
-          .from("candidates")
-          .select("id, first_name, last_name, summary")
-          .limit(1)
-          .maybeSingle();
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) { setLoading(false); return; }
 
-        if (cand) {
-          setCandidateName(`${cand.first_name} ${cand.last_name}`);
+        const candIds = await resolveCandidateProfileIds(supabase, authUser);
 
-          const { data: edu } = await supabase.schema("candidate").from("education").select("id").eq("candidate_id", cand.id);
-          const { data: exp } = await supabase.schema("candidate").from("experience").select("id").eq("candidate_id", cand.id);
+        if (candIds.length > 0) {
+          const { data: cand } = await supabase
+            .schema("candidate")
+            .from("candidates")
+            .select("id, first_name, last_name, summary")
+            .in("id", candIds)
+            .limit(1)
+            .maybeSingle();
+
+          if (cand) {
+            setCandidateName(`${cand.first_name || "Candidate"} ${cand.last_name || ""}`.trim());
+          } else if (authUser.email) {
+            setCandidateName(authUser.email.split("@")[0]);
+          }
+
+          const { data: edu } = await supabase.schema("candidate").from("education").select("id").in("candidate_id", candIds);
+          const { data: exp } = await supabase.schema("candidate").from("experience").select("id").in("candidate_id", candIds);
 
           const eduCount = edu?.length || 0;
           const expCount = exp?.length || 0;
@@ -89,7 +101,7 @@ export default function CandidateDashboardPage() {
             .schema("application")
             .from("applications")
             .select("id, created_at, status, job_id")
-            .eq("candidate_id", cand.id)
+            .in("candidate_id", candIds)
             .is("deleted_at", null);
 
           if (apps) {
@@ -116,43 +128,57 @@ export default function CandidateDashboardPage() {
             .schema("assessment")
             .from("attempts")
             .select("id")
-            .eq("candidate_id", cand.id);
+            .in("candidate_id", candIds);
           if (attempts) setExamsCount(attempts.length);
 
-          const { data: interviews } = await supabase
-            .schema("interview")
-            .from("interviews")
-            .select("id, interview_type, scheduled_at, duration_minutes, meeting_link, application_id")
-            .order("scheduled_at", { ascending: true });
+          if (apps && apps.length > 0) {
+            const appIds = apps.map((a) => a.id);
 
-          if (interviews && interviews.length > 0) {
-            setInterviewsCount(interviews.length);
-            const appIds = interviews.map((m) => m.application_id);
-            const { data: apps } = await supabase.schema("application").from("applications").select("id, job_id").in("id", appIds);
+            const { data: interviews } = await supabase
+              .schema("interview")
+              .from("interviews")
+              .select("*")
+              .in("application_id", appIds)
+              .order("start_time", { ascending: true });
 
-            let jobsList: { id: string; title: string }[] = [];
-            if (apps && apps.length > 0) {
-              const jIds = apps.map((a) => a.job_id);
-              const { data: jobs } = await supabase.schema("job").from("jobs").select("id, title").in("id", jIds);
-              jobsList = jobs || [];
+            if (interviews && interviews.length > 0) {
+              setInterviewsCount(interviews.length);
+              const intAppIds = interviews.map((m) => m.application_id);
+              const { data: intApps } = await supabase.schema("application").from("applications").select("id, job_id").in("id", intAppIds);
+
+              let jobsList: { id: string; title: string }[] = [];
+              if (intApps && intApps.length > 0) {
+                const jIds = intApps.map((a) => a.job_id);
+                const { data: jobs } = await supabase.schema("job").from("jobs").select("id, title").in("id", jIds);
+                jobsList = jobs || [];
+              }
+
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const mapped: RecentInterview[] = interviews.map((meet: any) => {
+                const app = (intApps || []).find((a) => a.id === meet.application_id);
+                const job = app ? jobsList.find((j) => j.id === app.job_id) : null;
+                const meetingToken = meet.meeting_token || `smh_meet_${meet.id}`;
+                const nativeLink = (meet.meeting_link && !meet.meeting_link.includes("google.com"))
+                  ? meet.meeting_link
+                  : `/interview/lobby/${meetingToken}`;
+
+                const cleanTitle = (meet.meeting_title || meet.type || meet.interview_type || "Recruiter Final Interview")
+                  .replace(/Google Meet Interview/gi, "Recruiter Final Interview")
+                  .replace(/Google Meet/gi, "SmartHire Native Video");
+
+                return {
+                  id: meet.id,
+                  interview_type: cleanTitle,
+                  scheduled_at: meet.start_time || meet.scheduled_at || new Date().toISOString(),
+                  duration_minutes: meet.duration_minutes || 60,
+                  meeting_link: nativeLink,
+                  job_title: job ? job.title : "Technical Position",
+                };
+              });
+              setRecentInterviews(mapped.slice(0, 5));
+            } else {
+              setRecentInterviews([]);
             }
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const mapped: RecentInterview[] = interviews.map((meet: any) => {
-              const app = (apps || []).find((a) => a.id === meet.application_id);
-              const job = app ? jobsList.find((j) => j.id === app.job_id) : null;
-              return {
-                id: meet.id,
-                interview_type: meet.type || meet.interview_type || "Technical",
-                scheduled_at: meet.start_time || meet.scheduled_at || new Date().toISOString(),
-                duration_minutes: meet.duration_minutes || 60,
-                meeting_link: meet.meeting_link,
-                job_title: job ? job.title : "Technical Position",
-              };
-            });
-            setRecentInterviews(mapped.slice(0, 5));
-          } else {
-            setRecentInterviews([]);
           }
         }
 

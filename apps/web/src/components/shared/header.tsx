@@ -3,8 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Search, ChevronDown, User, LogOut, Settings, CheckCheck, Trash2 } from "lucide-react";
+import { Bell, Search, ChevronDown, User, LogOut, Settings, CheckCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useNotifications } from "@/hooks/use-notifications";
+import { UnreadDot } from "@/components/shared/UnreadDot";
 
 /* ─── Breadcrumb helper ──────────────────────────────────────── */
 function useBreadcrumb() {
@@ -43,122 +45,11 @@ export function Header() {
   const breadcrumbs = useBreadcrumb();
   const [profileOpen, setProfileOpen] = React.useState(false);
   const [notifOpen, setNotifOpen] = React.useState(false);
+  const [filterTab, setFilterTab] = React.useState<"all" | "unread">("all");
   const profileRef = React.useRef<HTMLDivElement>(null);
   const notifRef = React.useRef<HTMLDivElement>(null);
   const { user, logout } = useAuth();
-
-  const [notifications, setNotifications] = React.useState<
-    Array<{
-      id: string;
-      title: string;
-      desc: string;
-      time: string;
-      unread: boolean;
-      link: string;
-    }>
-  >([]);
-
-  // Load user-specific notifications dynamically
-  React.useEffect(() => {
-    if (!user) {
-      setNotifications([]);
-      return;
-    }
-    const fetchLiveNotifications = async () => {
-      try {
-        const res = await fetch("/api/notifications/in-app");
-        if (!res.ok) return;
-        const json = await res.json();
-        if (json.data && Array.isArray(json.data) && json.data.length > 0) {
-          const list: NotificationItem[] = json.data.map((item: any) => {
-            const timeAgo = item.created_at
-              ? `${Math.max(1, Math.round((Date.now() - new Date(item.created_at).getTime()) / 60000))}m ago`
-              : "Just now";
-
-            let targetLink = user.role === "candidate" ? "/candidate/applications" : "/recruiter/dashboard";
-            if (item.metadata?.applicationId) {
-              targetLink = user.role === "candidate" ? "/candidate/applications" : "/recruiter/pipeline";
-            }
-
-            return {
-              id: item.id,
-              title: item.subject || "Notification",
-              desc: item.body || "",
-              time: timeAgo,
-              unread: !item.is_read,
-              link: targetLink,
-            };
-          });
-          setNotifications(list);
-          return;
-        }
-      } catch (err) {
-        console.error("Failed to load live in-app notifications in Header", err);
-      }
-
-      // Fallback local notifications
-      const storageKey = `smarthire_user_notifs_${user.id}`;
-      try {
-        const stored = localStorage.getItem(storageKey);
-        if (stored) {
-          setNotifications(JSON.parse(stored));
-          return;
-        }
-      } catch {}
-
-      let initial: NotificationItem[] = [];
-      if (user.role === "candidate") {
-        initial = [
-          {
-            id: `n1_${user.id}`,
-            title: "🎉 SmartHire Candidate Dashboard Active",
-            desc: "Explore top software positions and complete AI evaluations.",
-            time: "5m ago",
-            unread: true,
-            link: "/candidate/jobs",
-          },
-        ];
-      } else if (user.role === "recruiter") {
-        initial = [
-          {
-            id: `n1_${user.id}`,
-            title: "🎯 SmartHire Recruiter Workspace Ready",
-            desc: "Manage pipeline candidates and screening workflows.",
-            time: "10m ago",
-            unread: true,
-            link: "/recruiter/pipeline",
-          },
-        ];
-      }
-      setNotifications(initial);
-    };
-
-    fetchLiveNotifications();
-  }, [user]);
-
-  const unreadCount = notifications.filter((n) => n.unread).length;
-
-  const markAllRead = async () => {
-    if (!user) return;
-    const updated = notifications.map((n) => ({ ...n, unread: false }));
-    setNotifications(updated);
-    try {
-      await fetch("/api/notifications/in-app", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ markAll: true }),
-      });
-      localStorage.setItem(`smarthire_user_notifs_${user.id}`, JSON.stringify(updated));
-    } catch {}
-  };
-
-  const clearAllNotifs = () => {
-    if (!user) return;
-    setNotifications([]);
-    try {
-      localStorage.setItem(`smarthire_user_notifs_${user.id}`, JSON.stringify([]));
-    } catch {}
-  };
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
   /* Close profile & notification dropdowns on outside click */
   React.useEffect(() => {
@@ -191,6 +82,41 @@ export function Header() {
 
   const profileLink = isCandidate ? "/candidate/profile" : "/recruiter/profile";
   const settingsLink = isCandidate ? "/candidate/settings" : "/recruiter/settings";
+
+  const filteredNotifications = notifications.filter((n) => {
+    if (filterTab === "unread") return !n.is_read;
+    return true;
+  });
+
+  const getTargetUrl = (item: any) => {
+    if (item.metadata?.action_url) return item.metadata.action_url;
+    if (isCandidate) {
+      if (item.type.includes("ASSESSMENT")) return "/candidate/assessments";
+      if (item.type.includes("INTERVIEW")) return "/candidate/interviews";
+      return "/candidate/applications";
+    } else {
+      if (item.metadata?.job_id && item.metadata?.application_id) {
+        return `/recruiter/pipeline?jobId=${item.metadata.job_id}&appId=${item.metadata.application_id}`;
+      }
+      if (item.type.includes("OFFER")) return "/recruiter/pipeline?round=offer";
+      return "/recruiter/pipeline";
+    }
+  };
+
+  const formatRelativeTime = (isoString: string) => {
+    try {
+      const diffMs = Date.now() - new Date(isoString).getTime();
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 1) return "Just now";
+      if (mins < 60) return `${mins}m ago`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    } catch {
+      return "Recently";
+    }
+  };
 
   return (
     <header className="flex h-16 w-full shrink-0 items-center justify-between border-b border-[#E8E8ED] bg-white px-4 md:px-6">
@@ -238,9 +164,9 @@ export function Header() {
           >
             <Bell className="h-[17px] w-[17px]" />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-[#FF3B30] text-white text-[10px] font-extrabold shadow-sm">
-                {unreadCount}
-              </span>
+              <div className="absolute -top-0.5 -right-0.5">
+                <UnreadDot count={unreadCount} size="badge" />
+              </div>
             )}
           </button>
 
@@ -250,69 +176,84 @@ export function Header() {
               <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                 <div className="flex items-center gap-2">
                   <Bell className="h-4 w-4 text-blue-600" />
-                  <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider">User Notifications</h4>
+                  <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider">Notifications</h4>
                 </div>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllRead}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
-                  >
-                    <CheckCheck className="h-3.5 w-3.5" /> Read All
-                  </button>
-                )}
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center bg-zinc-100 p-0.5 rounded-lg text-[11px] font-bold">
+                    <button
+                      onClick={() => setFilterTab("all")}
+                      className={`px-2 py-0.5 rounded-md transition-all ${
+                        filterTab === "all" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800"
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setFilterTab("unread")}
+                      className={`px-2 py-0.5 rounded-md transition-all ${
+                        filterTab === "unread" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800"
+                      }`}
+                    >
+                      Unread
+                    </button>
+                  </div>
+
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={() => markAllAsRead()}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                    >
+                      <CheckCheck className="h-3.5 w-3.5" /> Read All
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* List */}
               <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                {notifications.length === 0 ? (
+                {filteredNotifications.length === 0 ? (
                   <div className="py-8 text-center text-xs text-zinc-400 font-medium italic">
-                    No active notifications right now.
+                    {filterTab === "unread" ? "No unread notifications." : "No notifications available."}
                   </div>
                 ) : (
-                  notifications.map((n) => (
-                    <Link
-                      key={n.id}
-                      href={n.link}
-                      onClick={() => {
-                        if (user) {
-                          const updated = notifications.map((item) =>
-                            item.id === n.id ? { ...item, unread: false } : item
-                          );
-                          setNotifications(updated);
-                          try {
-                            localStorage.setItem(`smarthire_user_notifs_${user.id}`, JSON.stringify(updated));
-                          } catch {}
-                        }
-                        setNotifOpen(false);
-                      }}
-                      className={`block p-3 rounded-xl border text-xs transition-all ${
-                        n.unread
-                          ? "bg-blue-50/50 border-blue-200 hover:bg-blue-50"
-                          : "bg-zinc-50/60 border-zinc-100 hover:bg-zinc-100/80"
-                      }`}
-                    >
-                      <div className="flex justify-between items-start gap-2">
-                        <span className="font-extrabold text-zinc-900 flex items-center gap-1.5">
-                          {n.title}
-                          {n.unread && <span className="h-2 w-2 rounded-full bg-blue-600 inline-block shrink-0" />}
-                        </span>
-                        <span className="text-[10px] text-zinc-400 font-medium shrink-0">{n.time}</span>
-                      </div>
-                      <p className="text-[11px] text-zinc-600 font-medium mt-1 leading-snug">{n.desc}</p>
-                    </Link>
-                  ))
+                  filteredNotifications.map((n) => {
+                    const targetUrl = getTargetUrl(n);
+                    return (
+                      <Link
+                        key={n.id}
+                        href={targetUrl}
+                        onClick={async () => {
+                          if (!n.is_read) {
+                            await markAsRead(n.id);
+                          }
+                          setNotifOpen(false);
+                        }}
+                        className={`block p-3 rounded-xl border text-xs transition-all ${
+                          !n.is_read
+                            ? "bg-blue-50/50 border-blue-200 hover:bg-blue-50"
+                            : "bg-zinc-50/60 border-zinc-100 hover:bg-zinc-100/80"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="font-extrabold text-zinc-900 flex items-center gap-1.5">
+                            {!n.is_read && <UnreadDot size="sm" ping={true} />}
+                            {n.subject}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 font-medium shrink-0">
+                            {formatRelativeTime(n.created_at)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-600 font-medium mt-1 leading-snug">{n.body}</p>
+                      </Link>
+                    );
+                  })
                 )}
               </div>
 
               {notifications.length > 0 && (
                 <div className="pt-2 border-t border-zinc-100 flex justify-between items-center text-[11px]">
                   <span className="text-zinc-400 font-medium">{unreadCount} Unread</span>
-                  <button
-                    onClick={clearAllNotifs}
-                    className="text-red-500 hover:text-red-600 font-bold inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    <Trash2 className="h-3 w-3" /> Clear All
-                  </button>
                 </div>
               )}
             </div>
@@ -328,8 +269,8 @@ export function Header() {
             onClick={() => setProfileOpen((o) => !o)}
             className="flex items-center gap-2 rounded-[12px] px-2.5 py-1.5 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
           >
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt={displayName} className="h-7 w-7 rounded-full object-cover border border-zinc-200" />
+            {(user as any)?.avatarUrl ? (
+              <img src={(user as any).avatarUrl} alt={displayName} className="h-7 w-7 rounded-full object-cover border border-zinc-200" />
             ) : (
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0071E3] text-white text-[11px] font-bold">
                 {firstLetter}

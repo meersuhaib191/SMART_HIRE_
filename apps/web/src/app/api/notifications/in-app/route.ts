@@ -17,8 +17,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const notifications = await notificationService.getUserNotifications(user.id);
-    return NextResponse.json({ data: notifications });
+    const { data, error } = await supabase
+      .schema("notification")
+      .from("notifications")
+      .select("id, user_id, type, subject, body, metadata, idempotency_key, is_read, read_at, created_at")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      logger.error("[API Notifications] Failed to fetch user notifications", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data: data || [] });
   } catch (err) {
     logger.error("API error in GET /api/notifications/in-app", err);
     return NextResponse.json({ error: "Failed to fetch notifications" }, { status: 500 });
@@ -37,17 +50,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { notificationId, markAll } = body;
 
     if (markAll) {
-      const success = await notificationService.markAllAsRead(user.id);
-      return NextResponse.json({ success });
+      const { error } = await supabase
+        .schema("notification")
+        .from("notifications")
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq("user_id", user.id)
+        .eq("is_read", false);
+
+      if (error) logger.error("[API Notifications] Failed to mark all read", error);
+      return NextResponse.json({ success: !error });
     }
 
     if (notificationId) {
-      const success = await notificationService.markAsRead(notificationId, user.id);
-      return NextResponse.json({ success });
+      const { error } = await supabase
+        .schema("notification")
+        .from("notifications")
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq("id", notificationId)
+        .eq("user_id", user.id);
+
+      if (error) logger.error("[API Notifications] Failed to mark read", error);
+      return NextResponse.json({ success: !error });
     }
 
     return NextResponse.json({ error: "Missing notificationId or markAll parameter" }, { status: 400 });

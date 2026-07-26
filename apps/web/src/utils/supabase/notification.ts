@@ -1,10 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 
 /**
  * Creates a server-side Supabase client isolated to the 'notification' database schema.
  */
 export async function createNotificationClient() {
+  const { cookies } = await import("next/headers");
   const cookieStore = await cookies();
 
   const client = createServerClient(

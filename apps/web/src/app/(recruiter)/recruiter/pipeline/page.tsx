@@ -3,6 +3,7 @@
 import * as React from "react";
 import { ApplicationCard, CandidateDrawer, PipelineFilters, MetricsBar, CandidateAppCard } from "@/components/pipeline";
 import { FullScreenCandidateModal, CandidateApplicationModalData } from "@/components/pipeline/FullScreenCandidateModal";
+import { ScheduleFinalInterviewModal } from "@/components/interview/ScheduleFinalInterviewModal";
 import { logger } from "@smarthire/logger";
 import { isTechDomain } from "@/utils/domain-utils";
 import { SkeletonMetric, SkeletonCard } from "@/components/shared/Skeleton";
@@ -10,6 +11,8 @@ import { CheckCircle2, ChevronRight, Loader2, Briefcase, Video, UserCheck, Calen
 import { createBrowserClient } from "@supabase/ssr";
 
 import { useRouter } from "next/navigation";
+import { useNotifications } from "@/hooks/use-notifications";
+import { UnreadDot } from "@/components/shared/UnreadDot";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -24,7 +27,9 @@ const techColumns = [
   { key: "coding", name: "4. IDE Coding Round" },
   { key: "interview", name: "5. AI Interview" },
   { key: "zoom_interview", name: "6. Recruiter Final Interview" },
-  { key: "offer_sent", name: "7. Offers & Selection" },
+  { key: "hiring_decision", name: "7. Hiring Decision" },
+  { key: "offer_sent", name: "8. Offer" },
+  { key: "hired", name: "9. Hired / Joined" },
 ];
 
 const nonTechColumns = [
@@ -33,7 +38,9 @@ const nonTechColumns = [
   { key: "mcq", name: "3. MCQ Exam" },
   { key: "interview", name: "4. AI Interview" },
   { key: "zoom_interview", name: "5. Recruiter Final Interview" },
-  { key: "offer_sent", name: "6. Offers & Selection" },
+  { key: "hiring_decision", name: "6. Hiring Decision" },
+  { key: "offer_sent", name: "7. Offer" },
+  { key: "hired", name: "8. Hired / Joined" },
 ];
 
 function PdfUploader({
@@ -127,6 +134,7 @@ function formatErrorMessage(errData: unknown, fallback: string): string {
 
 export default function PipelinePage() {
   const router = useRouter();
+  const { hasUnreadForContext, markContextAsRead } = useNotifications();
   const [cards, setCards] = React.useState<CandidateAppCard[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [selectedJobId, setSelectedJobId] = React.useState("");
@@ -600,6 +608,7 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
 
   // Offer Letter Generation State
   const [offerModalCard, setOfferModalCard] = React.useState<CandidateAppCard | null>(null);
+  const [scheduleFinalInterviewCard, setScheduleFinalInterviewCard] = React.useState<CandidateAppCard | null>(null);
   const [fullScreenModalCard, setFullScreenModalCard] = React.useState<CandidateApplicationModalData | null>(null);
   const [offerCompanyName, setOfferCompanyName] = React.useState("Waadi Media");
   const [offerCompanyDivision, setOfferCompanyDivision] = React.useState("Corporate HR & Talent Acquisition Division");
@@ -882,7 +891,9 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
     if (s === "coding" || s === "ide_coding") return "coding";
     if (s === "interview" || s === "ai_interview" || s === "ai_room") return "interview";
     if (s === "zoom_interview" || s === "recruiter_review" || s === "interview_scheduled" || s === "final_interview") return "zoom_interview";
-    if (s === "offer_sent" || s === "offered" || s === "offer_accepted" || s === "joined") return "offer_sent";
+    if (s === "hiring_decision") return "hiring_decision";
+    if (s === "offer_sent" || s === "offered" || s === "offer" || s === "offer_accepted") return "offer_sent";
+    if (s === "hired" || s === "joined") return "hired";
     return s;
   };
 
@@ -1475,7 +1486,7 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
       <div className="flex items-center justify-between py-2 border-b border-zinc-200 gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
-            {viewMode === "summary" ? "📊 Level 1: Recruitment Funnel Overview" : "📋 Level 2: Operational Candidate Kanban Board"}
+            {viewMode === "summary" ? "Pipeline Overview" : "Full Hiring Pipeline"}
           </span>
           <span className="text-[10px] font-bold text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full border border-zinc-200">
             {activeJobDetails?.title || "Active Job"}
@@ -1629,7 +1640,7 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                 const completed = colCards.filter((c) => c.coding_score != null).length;
                 const pending = Math.max(0, totalCandidates - completed);
                 const scores = colCards.map((c) => c.coding_score).filter((s): s is number => s != null);
-                const avgScore = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) : null;
+                const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
 
                 return (
                   <div
@@ -1677,8 +1688,9 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                     <div className="flex items-center justify-between border-b border-zinc-100 pb-3 mb-3">
                       <div className="flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full bg-violet-600" />
-                        <h3 className="text-xs font-extrabold text-zinc-900 group-hover:text-violet-600 transition-colors">
-                          {col.name}
+                        <h3 className="text-xs font-extrabold text-zinc-900 group-hover:text-violet-600 transition-colors flex items-center gap-1.5">
+                          <span>{col.name}</span>
+                          {hasUnreadForContext({ jobId: selectedJobId, roundKey: col.key }) && <UnreadDot size="sm" />}
                         </h3>
                       </div>
                       <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 text-[11px] font-bold border border-violet-100">
@@ -1749,10 +1761,48 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                 );
               }
 
-              // 6. Offers & Selection Card Metrics
+              // 6. Hiring Decision Card Metrics
+              if (col.key === "hiring_decision") {
+                const awaitingDecision = colCards.filter((c) => !["approved_for_offer", "on_hold", "rejected"].includes(c.decision_status || "")).length;
+                const approved = colCards.filter((c) => c.decision_status === "approved_for_offer").length;
+                const onHold = colCards.filter((c) => c.decision_status === "on_hold").length;
+
+                return (
+                  <div
+                    key={col.key}
+                    onClick={() => router.push(`/recruiter/jobs/${selectedJobId}/hiring-decision`)}
+                    className="group relative flex flex-col justify-between p-4 rounded-2xl bg-white border border-[#D2D2D7] shadow-xs hover:shadow-md hover:border-violet-600 transition-all cursor-pointer overflow-hidden text-left"
+                  >
+                    <div className="flex items-center justify-between border-b border-zinc-100 pb-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-violet-600" />
+                        <h3 className="text-xs font-extrabold text-zinc-900 group-hover:text-violet-600 transition-colors">
+                          {col.name}
+                        </h3>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 text-[11px] font-bold border border-violet-100">
+                        {totalCandidates} Candidates
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-[11px]">
+                      <div className="flex justify-between"><span className="font-medium text-zinc-500">Awaiting Decision:</span><span className="font-bold text-amber-600">{awaitingDecision}</span></div>
+                      <div className="flex justify-between"><span className="font-medium text-zinc-500">Approved for Offer:</span><span className="font-bold text-emerald-600">{approved}</span></div>
+                      <div className="flex justify-between"><span className="font-medium text-zinc-500">On Hold:</span><span className="font-bold text-violet-600">{onHold}</span></div>
+                    </div>
+
+                    <div className="mt-4 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] font-bold text-violet-600">
+                      <span>Open Decisions →</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // 7. Offer Card Metrics
               if (col.key === "offer_sent") {
                 const offersGenerated = colCards.length;
                 const offersAccepted = colCards.filter((c) => c.status === "offer_accepted" || c.status === "joined").length;
+                const offersSent = colCards.filter((c) => c.status === "offer_sent" || c.status === "offered").length;
 
                 return (
                   <div
@@ -1768,18 +1818,53 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                         </h3>
                       </div>
                       <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-100">
-                        {totalCandidates} Selected
+                        {totalCandidates} Candidates
                       </span>
                     </div>
 
                     <div className="space-y-2 text-[11px]">
-                      <div className="flex justify-between"><span className="font-medium text-zinc-500">Offers Generated:</span><span className="font-bold text-zinc-900">{offersGenerated}</span></div>
-                      <div className="flex justify-between"><span className="font-medium text-zinc-500">Offers Accepted:</span><span className="font-bold text-emerald-600">{offersAccepted}</span></div>
-                      <div className="flex justify-between"><span className="font-medium text-zinc-500">Rejected Base:</span><span className="font-bold text-red-600">{rejectedCards.length}</span></div>
+                      <div className="flex justify-between"><span className="font-medium text-zinc-500">Offers Sent:</span><span className="font-bold text-blue-600">{offersSent}</span></div>
+                      <div className="flex justify-between"><span className="font-medium text-zinc-500">Accepted:</span><span className="font-bold text-emerald-600">{offersAccepted}</span></div>
+                      <div className="flex justify-between"><span className="font-medium text-zinc-500">Total Offers:</span><span className="font-bold text-zinc-900">{offersGenerated}</span></div>
                     </div>
 
                     <div className="mt-4 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] font-bold text-emerald-600">
-                      <span>Open Offer Details →</span>
+                      <span>Open Offers →</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // 8. Hired / Joined Card Metrics
+              if (col.key === "hired") {
+                const joinedCount = colCards.filter((c) => c.status === "joined" || c.joining_status === "joined").length;
+                const pendingJoin = colCards.filter((c) => c.status === "hired" && c.joining_status !== "joined").length;
+
+                return (
+                  <div
+                    key={col.key}
+                    onClick={() => router.push(`/recruiter/jobs/${selectedJobId}/offers`)}
+                    className="group relative flex flex-col justify-between p-4 rounded-2xl bg-white border border-[#D2D2D7] shadow-xs hover:shadow-md hover:border-teal-600 transition-all cursor-pointer overflow-hidden text-left"
+                  >
+                    <div className="flex items-center justify-between border-b border-zinc-100 pb-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-teal-600" />
+                        <h3 className="text-xs font-extrabold text-zinc-900 group-hover:text-teal-600 transition-colors">
+                          {col.name}
+                        </h3>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 text-[11px] font-bold border border-teal-100">
+                        {totalCandidates} Candidates
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-[11px]">
+                      <div className="flex justify-between"><span className="font-medium text-zinc-500">Joined:</span><span className="font-bold text-teal-600">{joinedCount}</span></div>
+                      <div className="flex justify-between"><span className="font-medium text-zinc-500">Joining Pending:</span><span className="font-bold text-amber-600">{pendingJoin}</span></div>
+                    </div>
+
+                    <div className="mt-4 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] font-bold text-teal-600">
+                      <span>View Hired Candidates →</span>
                     </div>
                   </div>
                 );
@@ -1838,7 +1923,9 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
               }
               if (col.key === "interview") return ["interview", "ai_interview"].includes(c.status);
               if (col.key === "zoom_interview") return ["zoom_interview", "recruiter_review", "interview_scheduled", "final_interview"].includes(c.status);
-              if (col.key === "offer_sent") return ["offer_sent", "offer_accepted", "joined", "offered"].includes(c.status);
+              if (col.key === "hiring_decision") return c.status === "hiring_decision";
+              if (col.key === "offer_sent") return ["offer_sent", "offer_accepted", "offered", "offer"].includes(c.status);
+              if (col.key === "hired") return ["hired", "joined"].includes(c.status);
               return c.status === col.key;
             });
 
@@ -2166,7 +2253,9 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                       <ApplicationCard
                         key={card.id}
                         card={card}
+                        isUnread={hasUnreadForContext({ applicationId: card.id })}
                         onClick={(c) => {
+                          markContextAsRead({ applicationId: c.id });
                           if (col.key === "interview") {
                             setInterviewCard(c);
                             setInterviewDateTime(c.interview_scheduled_at ? new Date(new Date(c.interview_scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : getDefaultDatetimeLocal());
@@ -2178,7 +2267,14 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                         onAdvance={handleAdvanceSingleCandidate}
                         onReject={col.key === "offer_sent" ? undefined : (c) => handleRejectCandidate(c, col.key)}
                         onReinstate={(c) => handleReinstateCandidate(c, col.key)}
-                        onFullScreen={(c) => setFullScreenModalCard(c as any)}
+                        onFullScreen={(c) => {
+                          markContextAsRead({ applicationId: c.id });
+                          setFullScreenModalCard(c as any);
+                        }}
+                        onScheduleFinalInterview={(c) => {
+                          markContextAsRead({ applicationId: c.id });
+                          setScheduleFinalInterviewCard(c);
+                        }}
                         nextStageName={nextCol?.name}
                       />
                     );
@@ -2838,6 +2934,21 @@ onScheduleInterview={(c) => {
       }
       setFullScreenModalCard(null);
     }}
+  />
+)}
+
+{scheduleFinalInterviewCard && (
+  <ScheduleFinalInterviewModal
+    isOpen={Boolean(scheduleFinalInterviewCard)}
+    onClose={() => setScheduleFinalInterviewCard(null)}
+    onSuccess={() => {
+      setScheduleFinalInterviewCard(null);
+      fetchJobPipeline();
+    }}
+    applicationId={scheduleFinalInterviewCard.id}
+    candidateName={scheduleFinalInterviewCard.candidate_name}
+    candidateEmail={scheduleFinalInterviewCard.candidate_email}
+    jobTitle={scheduleFinalInterviewCard.job_title || activeJobDetails?.title}
   />
 )}
 </div>
