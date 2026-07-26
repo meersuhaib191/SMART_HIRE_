@@ -4,11 +4,12 @@ import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@smarthire/ui";
-import { ArrowLeft, Video, ChevronRight, BarChart3, Calendar, Clock, UserCheck, ExternalLink, Plus, Award, RefreshCw } from "lucide-react";
+import { ArrowLeft, Video, ChevronRight, BarChart3, Calendar, Clock, UserCheck, ExternalLink, Plus, Award, RefreshCw, Gift, XCircle, CheckCircle2 } from "lucide-react";
 import { logger } from "@smarthire/logger";
 import { createBrowserClient } from "@supabase/ssr";
 import { ScheduleFinalInterviewModal } from "@/components/interview/ScheduleFinalInterviewModal";
 import { ScorecardModal } from "@/components/interview/ScorecardModal";
+import { OfferModal } from "@/components/interview/OfferModal";
 
 const REAL_URL = "https://yljipgjfkfwacaspifcq.supabase.co";
 const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsamlwZ2pma2Z3YWNhc3BpZmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkxNTEsImV4cCI6MjA5OTMzNTE1MX0.mR3IEFREknQ8y9RTZXMOcIZJHQzzGhDmzqmP7GrvAjg";
@@ -45,6 +46,7 @@ export default function FinalInterviewDetailPage() {
   // Modals state
   const [scheduleModalApp, setScheduleModalApp] = React.useState<FinalInterviewCandidateItem | null>(null);
   const [scorecardModalApp, setScorecardModalApp] = React.useState<FinalInterviewCandidateItem | null>(null);
+  const [offerModalApp, setOfferModalApp] = React.useState<FinalInterviewCandidateItem | null>(null);
 
   const fetchFinalInterviewData = React.useCallback(async () => {
     setLoading(true);
@@ -293,12 +295,12 @@ export default function FinalInterviewDetailPage() {
                           <span className="text-zinc-400 italic">—</span>
                         )}
                       </td>
-                      <td className="p-3.5 text-right space-x-2">
+                      <td className="p-3.5 text-right flex items-center justify-end gap-2">
                         {!isScheduled && !isDone && (
                           <Button
                             size="sm"
                             onClick={() => setScheduleModalApp(c)}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold h-7.5 px-3 shadow-xs"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold h-7.5 px-3 shadow-xs cursor-pointer"
                           >
                             Schedule
                           </Button>
@@ -308,7 +310,7 @@ export default function FinalInterviewDetailPage() {
                           <Link href={c.meeting_link || "#"}>
                             <Button
                               size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold h-7.5 px-3 shadow-xs"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold h-7.5 px-3 shadow-xs cursor-pointer"
                             >
                               Join Interview
                             </Button>
@@ -320,11 +322,45 @@ export default function FinalInterviewDetailPage() {
                             size="sm"
                             variant="outline"
                             onClick={() => setScorecardModalApp(c)}
-                            className="text-[11px] font-bold h-7.5 px-3 border-zinc-300"
+                            className="text-[11px] font-bold h-7.5 px-2.5 border-zinc-300 cursor-pointer"
                           >
-                            <Award className="h-3.5 w-3.5 text-indigo-600" /> View Evaluation
+                            <Award className="h-3.5 w-3.5 text-indigo-600 mr-1" /> Evaluation
                           </Button>
                         )}
+
+                        {/* Offer / Reject Decision Buttons */}
+                        {["zoom_interview", "final_interview", "hiring_decision", "completed"].includes(c.status) || isDone ? (
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={() => setOfferModalApp(c)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold h-7.5 px-3 shadow-xs gap-1 cursor-pointer"
+                            >
+                              <Gift className="h-3.5 w-3.5" /> Offer
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                if (confirm(`Are you sure you want to reject ${c.first_name} ${c.last_name}?`)) {
+                                  await supabase.schema("application").from("applications").update({ status: "rejected" }).eq("id", c.id);
+                                  fetchFinalInterviewData();
+                                }
+                              }}
+                              className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50 text-[11px] font-bold h-7.5 px-2.5 cursor-pointer"
+                            >
+                              <XCircle className="h-3.5 w-3.5" /> Reject
+                            </Button>
+                          </>
+                        ) : c.status === "offer_sent" || c.status === "offered" ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">
+                            <Gift className="h-3.5 w-3.5 text-emerald-600" /> Offer Sent
+                          </span>
+                        ) : c.status === "hired" || c.status === "joined" ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-emerald-500 text-white">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Hired
+                          </span>
+                        ) : null}
                       </td>
                     </tr>
                   );
@@ -362,6 +398,22 @@ export default function FinalInterviewDetailPage() {
           }}
           interviewId={scorecardModalApp.interview_id || scorecardModalApp.id}
           candidateName={`${scorecardModalApp.first_name} ${scorecardModalApp.last_name}`}
+          jobTitle={jobTitle}
+        />
+      )}
+
+      {/* Offer Letter Generation Modal */}
+      {offerModalApp && (
+        <OfferModal
+          isOpen={Boolean(offerModalApp)}
+          onClose={() => setOfferModalApp(null)}
+          onSuccess={() => {
+            setOfferModalApp(null);
+            fetchFinalInterviewData();
+          }}
+          applicationId={offerModalApp.id}
+          candidateName={`${offerModalApp.first_name} ${offerModalApp.last_name}`}
+          candidateEmail={offerModalApp.email}
           jobTitle={jobTitle}
         />
       )}

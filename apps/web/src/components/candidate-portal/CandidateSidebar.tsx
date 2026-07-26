@@ -97,6 +97,7 @@ export function CandidateSidebar() {
     { label: "Job History", href: "/candidate/history", icon: History },
     { label: "Assessments", href: "/candidate/assessments", icon: ClipboardCheck, category: "assessments" as const },
     { label: "Interviews", href: "/candidate/interviews", icon: Calendar, category: "interviews" as const },
+    { label: "My Offers", href: "/candidate/offers", icon: Gift, category: "offers" as const },
   ];
 
   const checkItemUnread = (link: (typeof links)[0]) => {
