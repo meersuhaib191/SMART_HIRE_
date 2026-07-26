@@ -48,20 +48,58 @@ interface RemotePeer {
 
 function RemotePeerTile({ peer }: { peer: RemotePeer }) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const [hasVideo, setHasVideo] = React.useState(false);
 
   React.useEffect(() => {
-    if (videoRef.current && peer.stream) {
-      videoRef.current.srcObject = peer.stream;
-      videoRef.current.play().catch(() => {});
-    }
+    const el = videoRef.current;
+    if (!el || !peer.stream) return;
+
+    el.srcObject = peer.stream;
+
+    const checkTrack = () => {
+      const tracks = peer.stream.getVideoTracks();
+      const isLive = tracks.length > 0 && tracks.some((t) => t.enabled && t.readyState === "live");
+      setHasVideo(isLive);
+      if (videoRef.current) {
+        videoRef.current.play().catch(() => {});
+      }
+    };
+
+    checkTrack();
+
+    peer.stream.onaddtrack = checkTrack;
+    peer.stream.onremovetrack = checkTrack;
+
+    const interval = setInterval(checkTrack, 1000);
+
+    return () => {
+      clearInterval(interval);
+      if (peer.stream) {
+        peer.stream.onaddtrack = null;
+        peer.stream.onremovetrack = null;
+      }
+    };
   }, [peer.stream]);
 
   const roleBadge = peer.role === "recruiter" ? "Recruiter" : peer.role === "candidate" ? "Candidate" : "Panelist / Guest";
 
   return (
     <div className="relative rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl flex items-center justify-center min-h-[200px] w-full h-full">
-      <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-      <div className="absolute bottom-4 left-4 bg-zinc-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/10 flex items-center gap-2">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        className={`w-full h-full object-cover ${hasVideo ? "block" : "hidden"}`}
+      />
+      {!hasVideo && (
+        <div className="flex flex-col items-center gap-2 text-zinc-500">
+          <div className="w-14 h-14 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-zinc-300 text-lg border border-zinc-700">
+            {peer.name ? peer.name[0] : "P"}
+          </div>
+          <span className="text-xs font-bold text-zinc-400">{peer.name} ({roleBadge})</span>
+        </div>
+      )}
+      <div className="absolute bottom-4 left-4 bg-zinc-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/10 flex items-center gap-2 z-10">
         <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
         <span className="text-xs font-extrabold text-white">{peer.name} ({roleBadge})</span>
       </div>
@@ -182,18 +220,20 @@ export default function MeetingRoomPage() {
       peersMapRef.current.set(targetPeerId, { pc, peer: newPeer });
 
       pc.ontrack = (event) => {
-        logger.info(`[MeetingRoom] Remote track from ${targetName}:`, event.streams);
-        if (event.streams && event.streams[0]) {
-          const remoteStream = event.streams[0];
-          newPeer.stream = remoteStream;
-          setRemotePeers((prev) => {
-            const exists = prev.some((p) => p.peerId === targetPeerId);
-            if (exists) {
-              return prev.map((p) => (p.peerId === targetPeerId ? { ...p, stream: remoteStream } : p));
-            }
-            return [...prev, newPeer];
-          });
+        logger.info(`[MeetingRoom] Remote track from ${targetName}:`, event.streams, event.track);
+        let streamToUse = event.streams && event.streams[0] ? event.streams[0] : newPeer.stream;
+        if (event.track && !streamToUse.getTracks().some((t) => t.id === event.track.id)) {
+          streamToUse.addTrack(event.track);
         }
+        newPeer.stream = streamToUse;
+
+        setRemotePeers((prev) => {
+          const exists = prev.some((p) => p.peerId === targetPeerId);
+          if (exists) {
+            return prev.map((p) => (p.peerId === targetPeerId ? { ...p, stream: streamToUse } : p));
+          }
+          return [...prev, { ...newPeer, stream: streamToUse }];
+        });
       };
 
       pc.onicecandidate = (event) => {
@@ -347,7 +387,10 @@ export default function MeetingRoomPage() {
         if (type === "peer-joined") {
           logger.info(`[MeetingRoom] Peer joined: ${senderName} (${senderRole})`);
           const pc = createPeerConnectionForUser(senderPeerId, senderName, senderRole, channel);
-          const offer = await pc.createOffer();
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+          });
           await pc.setLocalDescription(offer);
           channel.send({
             type: "broadcast",
@@ -365,7 +408,10 @@ export default function MeetingRoomPage() {
           logger.info(`[MeetingRoom] Offer received from ${senderName}`);
           const pc = createPeerConnectionForUser(senderPeerId, senderName, senderRole, channel);
           await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
-          const answer = await pc.createAnswer();
+          const answer = await pc.createAnswer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+          });
           await pc.setLocalDescription(answer);
           channel.send({
             type: "broadcast",
