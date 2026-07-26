@@ -334,9 +334,9 @@ export default function MeetingRoomPage() {
     screenStream?.getTracks().forEach((t) => t.stop());
 
     if (role === "recruiter") {
-      setScorecardOpen(true);
+      router.push("/recruiter/pipeline");
     } else {
-      router.push("/candidate/assessments");
+      router.push("/candidate/applications");
     }
   };
 
@@ -346,6 +346,30 @@ export default function MeetingRoomPage() {
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
           <span className="text-xs font-bold text-zinc-400">Connecting to SmartHire Meeting Room...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (session && (session.status === "completed" || session.status === "ended")) {
+    return (
+      <div className="h-screen w-screen bg-zinc-950 flex items-center justify-center p-4 text-white font-sans">
+        <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-3xl p-8 text-center space-y-5 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto font-bold text-xl">
+            ✓
+          </div>
+          <div>
+            <h2 className="text-xl font-black tracking-tight">SmartHire Room Closed</h2>
+            <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+              This live interview session for <strong className="text-white">{session.candidateName}</strong> ({session.jobTitle}) has ended and the meeting room is officially closed.
+            </p>
+          </div>
+          <Button
+            onClick={() => router.push(role === "recruiter" ? "/recruiter/pipeline" : "/candidate/applications")}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs py-3 rounded-2xl shadow-md cursor-pointer"
+          >
+            {role === "recruiter" ? "Return to Full Pipeline Kanban" : "Return to My Applications"}
+          </Button>
         </div>
       </div>
     );
