@@ -87,9 +87,6 @@ export default function MeetingRoomPage() {
   // Candidate Quick Context Data
   const [contextData, setContextData] = React.useState<any>(null);
 
-  // Scorecard Modal State
-  const [scorecardOpen, setScorecardOpen] = React.useState(false);
-
   const localVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -834,24 +831,6 @@ export default function MeetingRoomPage() {
           </Button>
         </div>
       </footer>
-
-      {/* Recruiter Evaluation Scorecard Modal */}
-      {scorecardOpen && session && (
-        <ScorecardModal
-          isOpen={scorecardOpen}
-          onClose={() => {
-            setScorecardOpen(false);
-            router.push(`/recruiter/jobs/${session.jobId}/hiring-decision`);
-          }}
-          onSuccess={() => {
-            setScorecardOpen(false);
-            router.push(`/recruiter/jobs/${session.jobId}/hiring-decision`);
-          }}
-          interviewId={session.interviewId}
-          candidateName={session.candidateName}
-          jobTitle={session.jobTitle}
-        />
-      )}
     </div>
   );
 }
