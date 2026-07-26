@@ -23,34 +23,34 @@ export async function GET(
 
     const { data: { user } } = await supabase.auth.getUser();
 
-    let role: "recruiter" | "candidate" | "guest" = "guest";
-    let displayName = "Participant";
+    let role: "recruiter" | "candidate" = "candidate";
+    let displayName = sessionData.candidateName || "Candidate";
 
     if (user) {
-      // Check if user is candidate for this application
-      const { data: cand } = await supabase
-        .schema("candidate")
-        .from("candidates")
-        .select("id, first_name, last_name")
+      // Check if user is recruiter for company
+      const { data: rec } = await supabase
+        .schema("organization")
+        .from("recruiters")
+        .select("id, first_name, last_name, company_id")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (cand && cand.id === sessionData.candidateId) {
-        role = "candidate";
-        displayName = `${cand.first_name || ""} ${cand.last_name || ""}`.trim() || "Candidate";
+      if (rec) {
+        role = "recruiter";
+        const recName = `${rec.first_name || ""} ${rec.last_name || ""}`.trim();
+        displayName = recName || sessionData.interviewerName || "Recruiter";
       } else {
-        // Check if user is recruiter for company
-        const { data: rec } = await supabase
-          .schema("organization")
-          .from("recruiters")
-          .select("id, first_name, last_name, company_id")
+        // User is candidate
+        role = "candidate";
+        const { data: cand } = await supabase
+          .schema("candidate")
+          .from("candidates")
+          .select("first_name, last_name")
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (rec) {
-          role = "recruiter";
-          displayName = `${rec.first_name || ""} ${rec.last_name || ""}`.trim() || "Recruiter";
-        }
+        const candName = cand ? `${cand.first_name || ""} ${cand.last_name || ""}`.trim() : "";
+        displayName = candName || sessionData.candidateName || user.email?.split("@")[0] || "Candidate";
       }
     }
 

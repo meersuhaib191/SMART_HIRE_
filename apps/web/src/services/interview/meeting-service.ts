@@ -303,7 +303,7 @@ export class MeetingService {
       }
 
       if (!candidateName || candidateName.toLowerCase() === "candidate candidate" || candidateName.toLowerCase() === "candidate") {
-        candidateName = candidateEmail ? candidateEmail.split("@")[0] : "Applicant";
+        candidateName = candidateEmail ? candidateEmail.split("@")[0] : "Candidate";
       }
 
       // Resolve clean interviewer name
