@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import {
-  ClipboardCheck, Code2, Star, Award, Calendar,
-  Mail, Clock, Zap, XCircle, RotateCcw, Maximize2
+  ClipboardCheck, Code2, Star, Calendar,
+  Mail, Clock, Zap, XCircle, RotateCcw, Maximize2, CheckCircle2
 } from "lucide-react";
 
 import { UnreadDot } from "@/components/shared/UnreadDot";
@@ -47,21 +47,6 @@ interface ApplicationCardProps {
   isUnread?: boolean;
 }
 
-function MiniScoreBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${color}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className="text-[10px] font-bold tabular-nums text-zinc-700 w-8 text-right">{pct}%</span>
-    </div>
-  );
-}
-
 export function normalizeAtsScore(score: number | null | undefined): { normalizedPct: number; display10: string } {
   if (score === null || score === undefined || isNaN(Number(score))) {
     return { normalizedPct: 0, display10: "0.0" };
@@ -80,167 +65,74 @@ export function normalizeAtsScore(score: number | null | undefined): { normalize
 }
 
 function ScoreBadge({ card }: { card: CandidateAppCard }) {
-  const { status } = card;
+  const atsScore = card.screening_score != null ? card.screening_score : card.score != null ? card.score : null;
 
-  if (status === "screening" && card.screening_score != null) {
-    const { normalizedPct, display10 } = normalizeAtsScore(card.screening_score);
-    return (
-      <div className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-xl px-2.5 py-1.5">
-        <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
-          <Zap className="h-3 w-3 text-amber-500" /> ATS Score
-        </span>
-        <div className="flex items-center gap-1.5">
-          <span className={`text-xs font-bold ${normalizedPct >= 70 ? "text-emerald-600" : normalizedPct >= 40 ? "text-amber-600" : "text-red-600"}`}>
-            {normalizedPct}%
-          </span>
-          <span className="text-[10px] font-bold text-zinc-400">({display10}/10)</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "mcq" && card.mcq_score != null && card.mcq_total != null) {
-    const pct = (card.mcq_score / card.mcq_total) * 100;
-    return (
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-            <ClipboardCheck className="h-3 w-3 text-indigo-500" /> MCQ Result
+  return (
+    <div className="space-y-1.5 text-left">
+      {/* ATS Score */}
+      {atsScore != null && (
+        <div className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-xl px-2.5 py-1.5">
+          <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
+            <Zap className="h-3 w-3 text-amber-500" /> ATS Score
           </span>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-zinc-700">{card.mcq_score}/{card.mcq_total}</span>
-            {card.mcq_passed != null && (
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                card.mcq_passed ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-              }`}>
-                {card.mcq_passed ? "PASS" : "FAIL"}
-              </span>
-            )}
+            <span className={`text-xs font-bold ${Number(atsScore) >= 70 ? "text-emerald-600" : Number(atsScore) >= 40 ? "text-amber-600" : "text-red-600"}`}>
+              {Math.round(Number(atsScore))}%
+            </span>
           </div>
         </div>
-        <MiniScoreBar
-          value={card.mcq_score} max={card.mcq_total}
-          color={pct >= 70 ? "bg-indigo-400" : pct >= 40 ? "bg-amber-400" : "bg-red-400"}
-        />
-      </div>
-    );
-  }
+      )}
 
-  if (status === "coding" && card.coding_score != null && card.coding_total != null) {
-    const pct = (card.coding_score / card.coding_total) * 100;
-    return (
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-            <Code2 className="h-3 w-3 text-emerald-500" /> Code Score
+      {/* MCQ Score */}
+      {card.mcq_score != null && (
+        <div className="flex items-center justify-between bg-blue-50/60 border border-blue-100 rounded-xl px-2.5 py-1.5">
+          <span className="flex items-center gap-1 text-[10px] font-bold text-blue-700 uppercase tracking-wider">
+            <ClipboardCheck className="h-3 w-3 text-blue-600" /> MCQ Exam
           </span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-zinc-700">{card.coding_score}/{card.coding_total}</span>
-            {card.coding_passed != null && (
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                card.coding_passed ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-              }`}>
-                {card.coding_passed ? "PASS" : "FAIL"}
-              </span>
-            )}
-          </div>
+          <span className="text-xs font-black text-blue-800">
+            {card.mcq_score}/{card.mcq_total || 20}
+          </span>
         </div>
-        <MiniScoreBar
-          value={card.coding_score} max={card.coding_total}
-          color={pct >= 70 ? "bg-emerald-400" : pct >= 40 ? "bg-amber-400" : "bg-red-400"}
-        />
-      </div>
-    );
-  }
+      )}
 
-  if (status === "interview") {
-    const scoreVal = card.interview_avg_score ?? (card as any).ai_interview_score ?? card.score ?? null;
-    if (scoreVal != null && Number(scoreVal) > 0) {
-      const displayPct = Math.min(100, Math.max(0, Math.round(Number(scoreVal))));
-      const recMap: Record<string, { label: string; color: string; bg: string }> = {
-        strong_hire: { label: "Strong Hire", color: "text-emerald-700", bg: "bg-emerald-100" },
-        hire: { label: "Hire", color: "text-green-700", bg: "bg-green-100" },
-        neutral: { label: "Neutral", color: "text-amber-700", bg: "bg-amber-100" },
-        no_hire: { label: "No Hire", color: "text-orange-700", bg: "bg-orange-100" },
-        strong_no_hire: { label: "Strong No Hire", color: "text-red-700", bg: "bg-red-100" },
-      };
-      const rec = card.interview_recommendation ? recMap[card.interview_recommendation] : null;
-      return (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-              <Star className="h-3 w-3 text-violet-500" /> AI Interview
-            </span>
-            <span className="text-xs font-black text-violet-700 bg-violet-50 px-2 py-0.5 rounded-md border border-violet-200">
-              {displayPct}%
-            </span>
-          </div>
-          {rec && (
-            <div className="flex items-center justify-between pt-1">
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${rec.bg} ${rec.color}`}>
-                {rec.label}
-              </span>
-            </div>
-          )}
+      {/* Coding Score */}
+      {card.coding_score != null && (
+        <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-100 rounded-xl px-2.5 py-1.5">
+          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+            <Code2 className="h-3 w-3 text-emerald-600" /> Coding
+          </span>
+          <span className="text-xs font-black text-emerald-800">
+            {card.coding_score}/{card.coding_total || 100}
+          </span>
         </div>
-      );
-    }
+      )}
 
-    if (card.interview_scheduled_at) {
-      const isPast = new Date(card.interview_scheduled_at) < new Date();
-      return (
-        <div className={`flex items-center gap-1.5 p-2 rounded-lg ${isPast ? "bg-zinc-50" : "bg-blue-50"}`}>
-          <Calendar className={`h-3.5 w-3.5 shrink-0 ${isPast ? "text-zinc-400" : "text-blue-500"}`} />
-          <div>
-            <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Interview {isPast ? "was" : "scheduled"}</p>
-            <p className={`text-[10px] font-bold ${isPast ? "text-zinc-500" : "text-blue-700"}`}>
+      {/* Interview Score */}
+      {card.interview_avg_score != null && (
+        <div className="flex items-center justify-between bg-violet-50/60 border border-violet-100 rounded-xl px-2.5 py-1.5">
+          <span className="flex items-center gap-1 text-[10px] font-bold text-violet-700 uppercase tracking-wider">
+            <Star className="h-3 w-3 text-violet-600" /> Interview Score
+          </span>
+          <span className="text-xs font-black text-violet-800">
+            {Math.round(Number(card.interview_avg_score))}%
+          </span>
+        </div>
+      )}
+
+      {/* Scheduled Interview Date */}
+      {card.interview_scheduled_at && card.interview_avg_score == null && (
+        <div className="flex items-center gap-1.5 p-2 rounded-xl bg-indigo-50/70 border border-indigo-100">
+          <Calendar className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-wider">Interview Scheduled</p>
+            <p className="text-[10px] font-bold text-indigo-900 truncate">
               {new Date(card.interview_scheduled_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
             </p>
           </div>
         </div>
-      );
-    }
-
-    return (
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold text-zinc-400 italic">
-        <Clock className="h-3 w-3" /> AI Interview Ready
-      </div>
-    );
-  }
-
-  if (status === "zoom_interview" || status === "recruiter_review" || status === "final_interview" || status === "interview_scheduled") {
-    const isScheduled = Boolean(card.interview_scheduled_at);
-    return (
-      <div className="space-y-1.5 text-left">
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-            <Calendar className="h-3 w-3 text-indigo-600" /> Recruiter Final Interview
-          </span>
-          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${isScheduled ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>
-            {isScheduled ? "SCHEDULED" : "PENDING"}
-          </span>
-        </div>
-        {card.interview_scheduled_at && (
-          <div className="p-2 bg-indigo-50/70 border border-indigo-100 rounded-xl space-y-1">
-            <p className="text-[10px] font-bold text-indigo-900">
-              {new Date(card.interview_scheduled_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (status === "offered") {
-    return (
-      <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
-        <Award className="h-4 w-4 text-emerald-600" />
-        <span className="text-xs font-bold text-emerald-700">Offer Extended 🎉</span>
-      </div>
-    );
-  }
-
-  return null;
+      )}
+    </div>
+  );
 }
 
 const AVATAR_COLORS = [
@@ -251,9 +143,18 @@ const AVATAR_COLORS = [
   "from-rose-500 to-pink-600",
 ];
 
-export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstate, onFullScreen, onScheduleInterview, onScheduleFinalInterview, nextStageName, isUnread }: ApplicationCardProps) {
+export function ApplicationCard({
+  card,
+  onClick,
+  onAdvance,
+  onReject,
+  onReinstate,
+  onFullScreen,
+  onScheduleFinalInterview,
+  nextStageName,
+  isUnread,
+}: ApplicationCardProps) {
   const isRejected = card.status === "rejected" || card.status === "withdrawn";
-  const isOfferStage = ["offer_sent", "offered", "offer_accepted", "joined"].includes(card.status);
   const isFinalInterviewStage = ["zoom_interview", "recruiter_review", "final_interview", "interview_scheduled"].includes(card.status);
 
   const getInitials = (name: string) => {
@@ -288,7 +189,7 @@ export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstat
           : "border-zinc-200 bg-white hover:border-blue-200 hover:shadow-[0_4px_20px_0_rgba(0,113,227,0.1)]"
       }`}
     >
-      {/* Rejection Badge if rejected */}
+      {/* Rejection Badge */}
       {isRejected && (
         <div className="flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-0.5 rounded-full w-fit">
           <XCircle className="h-3 w-3 text-red-600 shrink-0" />
@@ -339,7 +240,7 @@ export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstat
         </div>
       </div>
 
-      {/* Score/Stage Badge */}
+      {/* Score / Evaluation Badges */}
       <div className="border-t border-zinc-100 pt-2">
         <ScoreBadge card={card} />
       </div>
@@ -375,7 +276,40 @@ export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstat
         </div>
       )}
 
-      {/* Footer info & optional reinstate */}
+      {/* Advance to Next Round & Reject Action Buttons */}
+      {!isRejected && (onAdvance || onReject) && (
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-100">
+          {onAdvance && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAdvance(card);
+              }}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold h-7.5 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>{nextStageName ? `Advance → ${nextStageName}` : "Advance"}</span>
+            </button>
+          )}
+
+          {onReject && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReject(card);
+              }}
+              className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[10px] font-bold h-7.5 rounded-xl flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              <span>Reject</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Footer info & optional reinstate / full screen */}
       {(isRejected || onFullScreen) && (
         <div className="flex items-center justify-between pt-2 border-t border-zinc-100 gap-1 flex-wrap">
           {isRejected && onReinstate && (
@@ -385,7 +319,7 @@ export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstat
                 e.stopPropagation();
                 onReinstate(card);
               }}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 transition-colors cursor-pointer"
               title="Reinstate candidate into active pipeline"
             >
               <RotateCcw className="h-3 w-3" />
@@ -400,7 +334,7 @@ export function ApplicationCard({ card, onClick, onAdvance, onReject, onReinstat
                 e.stopPropagation();
                 onFullScreen(card);
               }}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer ml-auto"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer ml-auto"
               title="Open Full Screen Applicant View"
             >
               <Maximize2 className="h-3 w-3 text-blue-600" />
