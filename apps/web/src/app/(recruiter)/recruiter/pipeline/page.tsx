@@ -1708,21 +1708,8 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                       <div className="flex justify-between"><span className="font-medium text-zinc-500">Pending:</span><span className="font-bold text-amber-600">{pending}</span></div>
                     </div>
 
-                    <div className="mt-4 pt-2 border-t border-zinc-100 flex items-center justify-between">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!selectedJobId) return;
-                          setInterviewDateTime(getDefaultDatetimeLocal());
-                          setInterviewDuration("60");
-                          setInterviewNotes("");
-                          setInterviewModalOpen(true);
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
-                      >
-                        <Calendar className="h-3 w-3" /> Schedule AI Interview
-                      </button>
-                      <span className="text-[10px] font-bold text-violet-600">Open AI Interview Details →</span>
+                    <div className="mt-4 pt-2 border-t border-zinc-100 flex items-center justify-end text-[10px] font-bold text-violet-600">
+                      <span>Open AI Interview Details →</span>
                     </div>
                   </div>
                 );
