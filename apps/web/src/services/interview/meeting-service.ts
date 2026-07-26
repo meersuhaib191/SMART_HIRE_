@@ -251,14 +251,27 @@ export class MeetingService {
       const candidateId = interview.candidate_id || app?.candidate_id || "";
 
       // Fetch Job Title & Company Name
-      let jobTitle = "Software Engineering Position";
+      let rawTitle = "";
       let activeCompanyId = interview.company_id || app?.company_id;
 
       if (jobId) {
         const { data: job } = await activeClient.schema("job").from("jobs").select("title, company_id").eq("id", jobId).maybeSingle();
-        if (job?.title) jobTitle = job.title;
+        if (job?.title) rawTitle = job.title;
         if (!activeCompanyId && job?.company_id) activeCompanyId = job.company_id;
       }
+
+      if (!rawTitle && interview.meeting_title && !interview.meeting_title.toLowerCase().includes("interview")) {
+        rawTitle = interview.meeting_title;
+      }
+
+      if (!rawTitle) {
+        rawTitle = "Full Stack Web Developer";
+      }
+
+      const jobTitle = rawTitle
+        .split(" ")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
 
       let companyName = "SmartHire Employer";
       if (activeCompanyId) {

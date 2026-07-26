@@ -122,6 +122,13 @@ export default function MeetingLobbyPage() {
     };
   }, [initMedia]);
 
+  React.useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [stream, camEnabled]);
+
   const toggleMic = () => {
     if (stream) {
       const audioTrack = stream.getAudioTracks()[0];
