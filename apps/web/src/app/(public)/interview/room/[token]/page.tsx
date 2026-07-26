@@ -389,7 +389,11 @@ export default function MeetingRoomPage() {
               )}
             </h1>
             <p className="text-[11px] text-zinc-400 font-medium">
-              Candidate: <span className="text-white font-bold">{session.candidateName}</span> • Interviewer: {session.interviewerName}
+              {role === "candidate" ? (
+                <>Interviewer: <span className="text-white font-bold">{session.interviewerName}</span></>
+              ) : (
+                <>Candidate: <span className="text-white font-bold">{session.candidateName}</span></>
+              )}
             </p>
           </div>
         </div>

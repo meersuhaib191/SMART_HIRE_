@@ -279,16 +279,53 @@ export class MeetingService {
         if (comp?.name) companyName = comp.name;
       }
 
-      let candidateName = "Candidate";
+      let candidateName = "";
       let candidateEmail = "";
       let candidateAvatar: string | undefined = undefined;
 
       if (candidateId) {
-        const { data: cand } = await activeClient.schema("candidate").from("candidates").select("first_name, last_name, email, avatar_url").eq("id", candidateId).maybeSingle();
+        const { data: cand } = await activeClient
+          .schema("candidate")
+          .from("candidates")
+          .select("first_name, last_name, email, avatar_url")
+          .eq("id", candidateId)
+          .maybeSingle();
+
         if (cand) {
-          candidateName = `${cand.first_name || ""} ${cand.last_name || ""}`.trim() || "Candidate";
+          const fn = (cand.first_name || "").trim();
+          const ln = (cand.last_name || "").trim();
+          if (fn || ln) {
+            candidateName = `${fn} ${ln}`.trim();
+          }
           candidateEmail = cand.email || "";
           candidateAvatar = cand.avatar_url || undefined;
+        }
+      }
+
+      if (!candidateName || candidateName.toLowerCase() === "candidate candidate" || candidateName.toLowerCase() === "candidate") {
+        candidateName = candidateEmail ? candidateEmail.split("@")[0] : "Applicant";
+      }
+
+      // Resolve clean interviewer name
+      let interviewerName = "Recruiter";
+      if (interview.created_by) {
+        const { data: rec } = await activeClient
+          .schema("organization")
+          .from("recruiters")
+          .select("first_name, last_name")
+          .eq("user_id", interview.created_by)
+          .maybeSingle();
+
+        if (rec && (rec.first_name || rec.last_name)) {
+          interviewerName = `${rec.first_name || ""} ${rec.last_name || ""}`.trim();
+        }
+      }
+
+      if ((!interviewerName || interviewerName === "Recruiter") && interview.meeting_title) {
+        if (interview.meeting_title.includes("with ")) {
+          interviewerName = interview.meeting_title.split("with ")[1].trim();
+        } else if (!interview.meeting_title.toLowerCase().includes("interview")) {
+          interviewerName = interview.meeting_title;
         }
       }
 
@@ -304,7 +341,7 @@ export class MeetingService {
         candidateName,
         candidateEmail,
         candidateAvatar,
-        interviewerName: interview.meeting_title || "Recruiter",
+        interviewerName,
         scheduledAt: interview.start_time,
         durationMinutes: interview.duration_minutes || 60,
         focusNotes: interview.focus_notes || undefined,
