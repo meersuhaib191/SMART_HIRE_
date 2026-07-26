@@ -124,9 +124,10 @@ export default function JobOverviewPage() {
         // Fetch application count
         const { count } = await supabase
           .schema("application")
-          .from("job_applications")
+          .from("applications")
           .select("*", { count: "exact", head: true })
-          .eq("job_id", jobId);
+          .eq("job_id", jobId)
+          .is("deleted_at", null);
 
         if (count !== null) setApplicantCount(count);
       } catch (err) {
