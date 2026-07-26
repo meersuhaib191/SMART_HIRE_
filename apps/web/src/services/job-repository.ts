@@ -1,4 +1,5 @@
 import { createJobClient } from "@/utils/supabase/job";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { logger } from "@smarthire/logger";
 import { z } from "zod";
 import { jobCreateSchema, jobUpdateSchema } from "./job-schemas";
@@ -64,23 +65,28 @@ export const jobRepository = {
    */
   getJobById: async (jobId: string) => {
     logger.info(`Repository: Fetching job by ID: ${jobId}`);
-    const jobClient = await createJobClient();
 
-    let { data } = await jobClient
+    try {
+      const adminSupabase = createAdminClient();
+      const { data: adminData } = await adminSupabase
+        .schema("job")
+        .from("jobs")
+        .select("*")
+        .eq("id", jobId)
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      if (adminData) return adminData;
+    } catch (e) {
+      logger.warn("getJobById admin query skipped", e);
+    }
+
+    const jobClient = await createJobClient();
+    const { data } = await jobClient
       .from("jobs")
       .select("*")
       .eq("id", jobId)
       .maybeSingle();
-
-    if (!data) {
-      const appClient = await createAppClient();
-      const { data: fallbackData } = await appClient
-        .from("jobs")
-        .select("*")
-        .eq("id", jobId)
-        .maybeSingle();
-      data = fallbackData;
-    }
 
     return data;
   },
@@ -92,12 +98,15 @@ export const jobRepository = {
     logger.info(`Repository: Inserting job posting: ${job.title}`);
     const supabase = await createJobClient();
 
+    const DEFAULT_COMPANY_ID = "11111111-1111-1111-1111-111111111111";
+    const DEFAULT_RECRUITER_ID = "33333333-3333-3333-3333-333333333333";
+
     const { data, error } = await supabase
       .from("jobs")
       .insert({
-        company_id: job.companyId,
-        department_id: job.departmentId,
-        recruiter_id: job.recruiterId,
+        company_id: job.companyId || DEFAULT_COMPANY_ID,
+        department_id: job.departmentId || null,
+        recruiter_id: job.recruiterId || DEFAULT_RECRUITER_ID,
         title: job.title,
         description: job.description,
         location: job.location,

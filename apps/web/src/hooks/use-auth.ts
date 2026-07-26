@@ -86,13 +86,13 @@ export function useAuth() {
       if (typeof window !== "undefined" && !avatarUrl) {
         try {
           const savedKey = `smarthire_active_recruiter_profile_${sessionUser.id}`;
-          const raw = localStorage.getItem(savedKey) || localStorage.getItem("smarthire_active_recruiter_profile");
+          const raw = localStorage.getItem(savedKey);
           if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed.recruiterFirstName && !firstName) firstName = parsed.recruiterFirstName;
             if (parsed.recruiterLastName && !lastName) lastName = parsed.recruiterLastName;
             if (parsed.recruiterAvatar) avatarUrl = parsed.recruiterAvatar;
-            if (role !== "admin" && role !== "platform-admin" && role !== "company-admin") role = "recruiter";
+            if ((role as string) !== "admin" && (role as string) !== "platform-admin" && role !== "company-admin") role = "recruiter";
           }
         } catch {
           // Ignore storage errors

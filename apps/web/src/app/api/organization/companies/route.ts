@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createOrgClient } from "@/utils/supabase/organization";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { createCompanySchema } from "@/services/organization-schemas";
 import { logger } from "@smarthire/logger";
 
@@ -86,16 +87,25 @@ export async function POST(request: NextRequest) {
     }
 
     const { name, slug, domain, logoUrl } = result.data;
-    logger.info(`Creating company profile: ${name} (slug: ${slug}) by user: ${user.id}`);
+    const baseSlug = (slug || name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "company";
+    const finalSlug = `${baseSlug}-${Math.random().toString(36).substring(2, 7)}`;
 
-    // 1. Insert the company details
-    const { data: company, error: companyError } = await supabase
+    logger.info(`Creating company profile: ${name} (slug: ${finalSlug}) by user: ${user.id}`);
+
+    const adminSupabase = createAdminClient();
+
+    // 1. Insert the company details using Admin Client
+    const { data: company, error: companyError } = await adminSupabase
+      .schema("organization")
       .from("companies")
       .insert({
         name,
-        slug,
-        domain,
-        logo_url: logoUrl,
+        slug: finalSlug,
+        domain: domain || null,
+        logo_url: logoUrl || null,
+        industry: result.data.industry || null,
+        company_size: result.data.companySize || null,
+        description: result.data.description || null,
       })
       .select()
       .single();
@@ -109,18 +119,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to register company" }, { status: 500 });
     }
 
-    // 2. Associate the creator as the 'owner' in the recruiters table
-    const { error: recruiterError } = await supabase.from("recruiters").insert({
-      user_id: user.id,
-      company_id: company.id,
-      role: "owner",
-    });
+    // 2. Associate the creator in the recruiters table
+    const { data: existingRec } = await adminSupabase
+      .schema("organization")
+      .from("recruiters")
+      .select("id")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    let recruiterError = null;
+    if (existingRec) {
+      const { error: updateErr } = await adminSupabase
+        .schema("organization")
+        .from("recruiters")
+        .update({
+          company_id: company.id,
+          role: "owner",
+        })
+        .eq("id", existingRec.id);
+      recruiterError = updateErr;
+    } else {
+      const { error: insertErr } = await adminSupabase
+        .schema("organization")
+        .from("recruiters")
+        .insert({
+          user_id: user.id,
+          company_id: company.id,
+          role: "owner",
+        });
+      recruiterError = insertErr;
+    }
 
     if (recruiterError) {
       logger.error("Failed to insert owner recruiter record", recruiterError);
-      // Clean up newly created company (atomic fallback since we don't have transaction wrappers easily)
-      await supabase.from("companies").delete().eq("id", company.id);
-      return NextResponse.json({ error: "Failed to link recruiter account" }, { status: 500 });
+      await adminSupabase.schema("organization").from("companies").delete().eq("id", company.id);
+      return NextResponse.json({ error: recruiterError.message || "Failed to link recruiter account" }, { status: 500 });
     }
 
     return NextResponse.json({ data: company }, { status: 201 });

@@ -7,9 +7,9 @@ export const jobCreateSchema = z
   .object({
     title: z.string().min(1, "Job title is required").max(255),
     description: z.string().min(1, "Job description is required"),
-    companyId: z.string().uuid("Invalid company ID format"),
-    departmentId: z.string().uuid("Invalid department ID format").optional().nullable(),
-    recruiterId: z.string().uuid("Invalid recruiter ID format"),
+    companyId: z.string().min(1, "Company ID is required"),
+    departmentId: z.string().optional().nullable(),
+    recruiterId: z.string().optional().nullable(),
     location: z.string().max(150).optional().nullable(),
     type: z.enum(["full-time", "part-time", "contract", "internship"]),
     status: z.enum(["draft", "published", "closed"]).default("draft"),

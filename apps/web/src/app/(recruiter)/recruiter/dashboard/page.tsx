@@ -54,7 +54,7 @@ export default function RecruiterDashboardPage() {
           // 1. First check local storage backup for customized company name
           if (typeof window !== "undefined") {
             const userProfileKey = `smarthire_active_recruiter_profile_${user.id}`;
-            const localData = localStorage.getItem(userProfileKey) || localStorage.getItem("smarthire_active_recruiter_profile");
+            const localData = localStorage.getItem(userProfileKey);
             if (localData) {
               try {
                 const parsed = JSON.parse(localData);
@@ -97,6 +97,24 @@ export default function RecruiterDashboardPage() {
         }
 
         // 3. Fetch Jobs posted by THIS recruiter / company ONLY
+        if (!userCompanyId && !userRecruiterId) {
+          setOpenJobsCount(0);
+          setDraftJobsCount(0);
+          setApplicationsCount(0);
+          setCandidatesCount(0);
+          setOffersCount(0);
+          setRecentApps([]);
+          setFunnelData([
+            { label: "Applied", value: 0 },
+            { label: "Screening", value: 0 },
+            { label: "Interview", value: 0 },
+            { label: "Offer", value: 0 },
+          ]);
+          setTrendData([]);
+          setLoading(false);
+          return;
+        }
+
         let jobsQuery = supabase.schema("job").from("jobs").select("id, title, status, company_id, recruiter_id").is("deleted_at", null);
         if (userCompanyId) {
           jobsQuery = jobsQuery.eq("company_id", userCompanyId);
@@ -295,10 +313,10 @@ export default function RecruiterDashboardPage() {
   }, []);
 
   const kpis = [
-    { label: "Open Positions", value: openJobsCount, subtext: "Currently recruiting", icon: Briefcase, color: "text-[#0071E3] bg-[#EAF3FF] border-[#C5DCFF]", trend: 8 },
+    { label: "Open Positions", value: openJobsCount, subtext: "Currently recruiting", icon: Briefcase, color: "text-[#0071E3] bg-[#EAF3FF] border-[#C5DCFF]", trend: openJobsCount > 0 ? 8 : undefined },
     { label: "Draft Positions", value: draftJobsCount, subtext: "Awaiting reviews", icon: Layers, color: "text-[#6E6E73] bg-[#F5F5F7] border-[#D2D2D7]" },
-    { label: "Active Applicants", value: applicationsCount, subtext: "Total funnel volume", icon: Users, color: "text-[#0071E3] bg-[#EAF3FF] border-[#C5DCFF]", trend: 12 },
-    { label: "Candidates Directory", value: candidatesCount, subtext: "Unique talent profiles", icon: FileSpreadsheet, color: "text-[#0071E3] bg-[#EAF3FF] border-[#C5DCFF]", trend: 5 },
+    { label: "Active Applicants", value: applicationsCount, subtext: "Total funnel volume", icon: Users, color: "text-[#0071E3] bg-[#EAF3FF] border-[#C5DCFF]", trend: applicationsCount > 0 ? 12 : undefined },
+    { label: "Candidates Directory", value: candidatesCount, subtext: "Unique talent profiles", icon: FileSpreadsheet, color: "text-[#0071E3] bg-[#EAF3FF] border-[#C5DCFF]", trend: candidatesCount > 0 ? 5 : undefined },
     { label: "Scheduled Interviews", value: interviewsToday.length, subtext: "Happening today", icon: Video, color: "text-[#34C759] bg-[#EAFBEE] border-[#C5F0D2]" },
     { label: "Offers Issued", value: offersCount, subtext: "Sent this month", icon: Award, color: "text-[#FF9F0A] bg-[#FFF8EE] border-[#FFE8C2]" },
   ];

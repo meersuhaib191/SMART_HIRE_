@@ -37,12 +37,36 @@ const REAL_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 
 const supabase = createBrowserClient(REAL_URL, REAL_KEY);
 
-interface ChatMessage {
-  id: string;
-  sender: string;
-  text: string;
-  time: string;
-  isSelf: boolean;
+interface RemotePeer {
+  peerId: string;
+  name: string;
+  role: string;
+  stream: MediaStream;
+  micEnabled?: boolean;
+  camEnabled?: boolean;
+}
+
+function RemotePeerTile({ peer }: { peer: RemotePeer }) {
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+
+  React.useEffect(() => {
+    if (videoRef.current && peer.stream) {
+      videoRef.current.srcObject = peer.stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [peer.stream]);
+
+  const roleBadge = peer.role === "recruiter" ? "Recruiter" : peer.role === "candidate" ? "Candidate" : "Panelist / Guest";
+
+  return (
+    <div className="relative rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl flex items-center justify-center min-h-[200px] w-full h-full">
+      <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+      <div className="absolute bottom-4 left-4 bg-zinc-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/10 flex items-center gap-2">
+        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+        <span className="text-xs font-extrabold text-white">{peer.name} ({roleBadge})</span>
+      </div>
+    </div>
+  );
 }
 
 export default function MeetingRoomPage() {
@@ -64,13 +88,12 @@ export default function MeetingRoomPage() {
   const [screenStream, setScreenStream] = React.useState<MediaStream | null>(null);
   const [handRaised, setHandRaised] = React.useState(false);
 
-  // Remote media / peer state
-  const [remoteConnected, setRemoteConnected] = React.useState(false);
+  // Multi-participant remote peers state
+  const [remotePeers, setRemotePeers] = React.useState<RemotePeer[]>([]);
   const [reconnecting, setReconnecting] = React.useState(false);
-  const [swappedLayout, setSwappedLayout] = React.useState(false);
 
   // Timer state
-  const [secondsRemaining, setSecondsRemaining] = React.useState<number>(3600); // 60 mins default
+  const [secondsRemaining, setSecondsRemaining] = React.useState<number>(3600);
   const [timerAlert, setTimerAlert] = React.useState<string | null>(null);
   const startTimeRef = React.useRef<number>(Date.now());
 
@@ -87,9 +110,17 @@ export default function MeetingRoomPage() {
   // Candidate Quick Context Data
   const [contextData, setContextData] = React.useState<any>(null);
 
+  // Element Refs & Peer Connection Map
   const localVideoRef = React.useRef<HTMLVideoElement | null>(null);
-  const remoteVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = React.useRef<HTMLVideoElement | null>(null);
+  const channelRef = React.useRef<any>(null);
+  const localStreamRef = React.useRef<MediaStream | null>(null);
+  const peersMapRef = React.useRef<Map<string, { pc: RTCPeerConnection; peer: RemotePeer }>>(new Map());
+
+  const myPeerId = React.useRef<string>("");
+  if (!myPeerId.current) {
+    myPeerId.current = `${role}-${Math.random().toString(36).slice(2, 9)}`;
+  }
 
   // Attach local stream whenever localVideoRef or stream updates
   React.useEffect(() => {
@@ -97,7 +128,7 @@ export default function MeetingRoomPage() {
       localVideoRef.current.srcObject = stream;
       localVideoRef.current.play().catch(() => {});
     }
-  }, [stream, camEnabled, swappedLayout, remoteConnected]);
+  }, [stream, camEnabled]);
 
   // Attach screen stream whenever screenVideoRef or screenStream updates
   React.useEffect(() => {
@@ -107,7 +138,91 @@ export default function MeetingRoomPage() {
     }
   }, [screenStream, isScreenSharing]);
 
-  // Fetch session & initialize WebRTC
+  const removePeer = React.useCallback((peerId: string) => {
+    const existing = peersMapRef.current.get(peerId);
+    if (existing) {
+      try {
+        existing.pc.close();
+      } catch {}
+      peersMapRef.current.delete(peerId);
+    }
+    setRemotePeers((prev) => prev.filter((p) => p.peerId !== peerId));
+  }, []);
+
+  // Multi-Peer WebRTC Factory
+  const createPeerConnectionForUser = React.useCallback(
+    (targetPeerId: string, targetName: string, targetRole: string, channel: any) => {
+      const existing = peersMapRef.current.get(targetPeerId);
+      if (existing) return existing.pc;
+
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun2.l.google.com:19302" },
+          { urls: "stun:stun3.l.google.com:19302" },
+          { urls: "stun:global.stun.twilio.com:3478" },
+        ],
+      });
+
+      // Add local media tracks
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => {
+          pc.addTrack(track, localStreamRef.current!);
+        });
+      }
+
+      const newPeer: RemotePeer = {
+        peerId: targetPeerId,
+        name: targetName || "Participant",
+        role: targetRole || "guest",
+        stream: new MediaStream(),
+      };
+
+      peersMapRef.current.set(targetPeerId, { pc, peer: newPeer });
+
+      pc.ontrack = (event) => {
+        logger.info(`[MeetingRoom] Remote track from ${targetName}:`, event.streams);
+        if (event.streams && event.streams[0]) {
+          const remoteStream = event.streams[0];
+          newPeer.stream = remoteStream;
+          setRemotePeers((prev) => {
+            const exists = prev.some((p) => p.peerId === targetPeerId);
+            if (exists) {
+              return prev.map((p) => (p.peerId === targetPeerId ? { ...p, stream: remoteStream } : p));
+            }
+            return [...prev, newPeer];
+          });
+        }
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate && channel) {
+          channel.send({
+            type: "broadcast",
+            event: "signal",
+            payload: {
+              type: "candidate",
+              candidate: event.candidate,
+              targetPeerId,
+              senderPeerId: myPeerId.current,
+            },
+          });
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+          removePeer(targetPeerId);
+        }
+      };
+
+      return pc;
+    },
+    [removePeer]
+  );
+
+  // Fetch session metadata
   const initSession = React.useCallback(async () => {
     try {
       setLoading(true);
@@ -129,12 +244,10 @@ export default function MeetingRoomPage() {
         setRecruiterNotes(data.sessionData.recruiterNotes);
       }
 
-      // Record attendance
       if (data.sessionData.interviewId) {
         MeetingService.recordParticipantJoined(data.sessionData.interviewId, data.role);
       }
 
-      // Fetch candidate context if recruiter
       if (data.role === "recruiter") {
         fetchCandidateContext(data.sessionData.applicationId);
       }
@@ -173,7 +286,7 @@ export default function MeetingRoomPage() {
     initSession();
   }, [initSession]);
 
-  // Media Stream Setup
+  // Local Stream Setup
   React.useEffect(() => {
     let activeStream: MediaStream | null = null;
     async function startLocalMedia() {
@@ -183,29 +296,31 @@ export default function MeetingRoomPage() {
           audio: true,
         });
       } catch (err) {
-        logger.warn("[MeetingRoom] Primary getUserMedia failed, trying video only", err);
+        logger.warn("[MeetingRoom] Primary getUserMedia failed, trying fallback", err);
         try {
           activeStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        } catch (err2) {
-          logger.warn("[MeetingRoom] Video only getUserMedia failed, trying audio only", err2);
+        } catch {
           try {
             activeStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-          } catch (err3) {
-            logger.warn("[MeetingRoom] All getUserMedia attempts failed", err3);
-          }
+          } catch {}
         }
       }
 
       if (activeStream) {
         setStream(activeStream);
+        localStreamRef.current = activeStream;
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = activeStream;
           localVideoRef.current.play().catch(() => {});
         }
-      }
 
-      // Simulate remote participant joining after 2 seconds
-      setTimeout(() => setRemoteConnected(true), 2000);
+        // Add tracks to existing peer connections
+        peersMapRef.current.forEach(({ pc }) => {
+          activeStream!.getTracks().forEach((track) => {
+            pc.addTrack(track, activeStream!);
+          });
+        });
+      }
     }
 
     startLocalMedia();
@@ -213,6 +328,137 @@ export default function MeetingRoomPage() {
       activeStream?.getTracks().forEach((t) => t.stop());
     };
   }, []);
+
+  // Multi-Participant Realtime Signaling Setup
+  React.useEffect(() => {
+    if (!session) return;
+
+    const roomId = session.interviewId || token;
+    const channelName = `meeting-room-${roomId}`;
+    const channel = supabase.channel(channelName);
+    channelRef.current = channel;
+
+    channel
+      .on("broadcast", { event: "signal" }, async ({ payload }) => {
+        if (!payload || payload.senderPeerId === myPeerId.current) return;
+
+        const { type, senderPeerId, senderName, senderRole, targetPeerId } = payload;
+
+        if (type === "peer-joined") {
+          logger.info(`[MeetingRoom] Peer joined: ${senderName} (${senderRole})`);
+          const pc = createPeerConnectionForUser(senderPeerId, senderName, senderRole, channel);
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          channel.send({
+            type: "broadcast",
+            event: "signal",
+            payload: {
+              type: "offer",
+              offer,
+              targetPeerId: senderPeerId,
+              senderPeerId: myPeerId.current,
+              senderName: displayName,
+              senderRole: role,
+            },
+          });
+        } else if (type === "offer" && targetPeerId === myPeerId.current) {
+          logger.info(`[MeetingRoom] Offer received from ${senderName}`);
+          const pc = createPeerConnectionForUser(senderPeerId, senderName, senderRole, channel);
+          await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          channel.send({
+            type: "broadcast",
+            event: "signal",
+            payload: {
+              type: "answer",
+              answer,
+              targetPeerId: senderPeerId,
+              senderPeerId: myPeerId.current,
+              senderName: displayName,
+              senderRole: role,
+            },
+          });
+        } else if (type === "answer" && targetPeerId === myPeerId.current) {
+          logger.info(`[MeetingRoom] Answer received from ${senderName}`);
+          const peerObj = peersMapRef.current.get(senderPeerId);
+          if (peerObj?.pc) {
+            await peerObj.pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
+          }
+        } else if (type === "candidate" && targetPeerId === myPeerId.current) {
+          const peerObj = peersMapRef.current.get(senderPeerId);
+          if (peerObj?.pc && payload.candidate) {
+            try {
+              await peerObj.pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            } catch (err) {
+              logger.warn("[MeetingRoom] Error adding ICE candidate", err);
+            }
+          }
+        } else if (type === "peer-left") {
+          removePeer(senderPeerId);
+        }
+      })
+      .on("broadcast", { event: "chat" }, ({ payload }) => {
+        if (payload) {
+          setChatMessages((prev) => [...prev, { ...payload, isSelf: false }]);
+        }
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          logger.info("[MeetingRoom] Subscribed to multi-participant signaling channel");
+          channel.send({
+            type: "broadcast",
+            event: "signal",
+            payload: {
+              type: "peer-joined",
+              senderPeerId: myPeerId.current,
+              senderName: displayName,
+              senderRole: role,
+            },
+          });
+        }
+      });
+
+    return () => {
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: "broadcast",
+          event: "signal",
+          payload: { type: "peer-left", senderPeerId: myPeerId.current },
+        });
+      }
+      channel.unsubscribe();
+      peersMapRef.current.forEach(({ pc }) => {
+        try {
+          pc.close();
+        } catch {}
+      });
+      peersMapRef.current.clear();
+      setRemotePeers([]);
+    };
+  }, [session, token, role, displayName, createPeerConnectionForUser, removePeer]);
+
+  // Presence Heartbeat: Announce presence every 3s while waiting for peers
+  React.useEffect(() => {
+    if (!session || remotePeers.length > 0) return;
+
+    const heartbeatTimer = setInterval(() => {
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: "broadcast",
+          event: "signal",
+          payload: {
+            type: "peer-joined",
+            senderPeerId: myPeerId.current,
+            senderName: displayName,
+            senderRole: role,
+          },
+        });
+      }
+    }, 3000);
+
+    return () => clearInterval(heartbeatTimer);
+  }, [session, remotePeers.length, displayName, role]);
 
   // Timer Countdown Effect
   React.useEffect(() => {
@@ -303,6 +549,15 @@ export default function MeetingRoomPage() {
     };
 
     setChatMessages((prev) => [...prev, newMsg]);
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "chat",
+        payload: newMsg,
+      });
+    }
+
     setChatInput("");
   };
 
@@ -436,7 +691,7 @@ export default function MeetingRoomPage() {
 
           <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-2xl font-bold">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            {remoteConnected ? "Connected" : "Waiting for peer..."}
+            {remotePeers.length > 0 ? `${remotePeers.length + 1} Connected` : "Waiting for participants..."}
           </div>
         </div>
       </header>
@@ -465,25 +720,10 @@ export default function MeetingRoomPage() {
                 </div>
               </div>
 
-              {/* Side video tiles during screen share */}
-              <div className="lg:col-span-1 flex flex-col gap-4">
-                <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden relative flex items-center justify-center">
-                  {remoteConnected ? (
-                    <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="flex flex-col items-center gap-2 text-zinc-500">
-                      <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-zinc-300">
-                        {remoteName[0]}
-                      </div>
-                      <span className="text-[10px] font-bold">Waiting...</span>
-                    </div>
-                  )}
-                  <span className="absolute bottom-3 left-3 bg-zinc-950/80 px-2.5 py-1 rounded-xl text-xs font-bold">
-                    {remoteName} ({remoteRoleLabel})
-                  </span>
-                </div>
-
-                <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden relative flex items-center justify-center">
+              {/* Side video tiles for participants during screen share */}
+              <div className="lg:col-span-1 flex flex-col gap-4 overflow-y-auto pr-1">
+                {/* Local user tile */}
+                <div className="flex-1 min-h-[160px] bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden relative flex items-center justify-center">
                   <video
                     ref={localVideoRef}
                     autoPlay
@@ -501,14 +741,21 @@ export default function MeetingRoomPage() {
                     You ({displayName})
                   </span>
                 </div>
+
+                {/* Remote peer tiles */}
+                {remotePeers.map((peer) => (
+                  <div key={peer.peerId} className="flex-1 min-h-[160px] w-full">
+                    <RemotePeerTile peer={peer} />
+                  </div>
+                ))}
               </div>
             </div>
           ) : (
-            /* REGULAR CAMERA VIDEO LAYOUT */
-            <div className="flex-1 w-full h-full relative rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl flex items-center justify-center">
-              {/* SOLO MODE: Remote peer has NOT joined yet — local stream takes FULL VIEW */}
-              {!remoteConnected ? (
-                <div className="w-full h-full relative flex items-center justify-center">
+            /* DYNAMIC MULTI-PARTICIPANT MEET GRID */
+            <div className="flex-1 w-full h-full relative rounded-3xl overflow-hidden bg-zinc-950 border border-zinc-800/80 shadow-2xl p-2 flex items-center justify-center">
+              {remotePeers.length === 0 ? (
+                /* SOLO VIEW: Waiting for participants */
+                <div className="w-full h-full relative rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800 flex items-center justify-center">
                   <video
                     ref={localVideoRef}
                     autoPlay
@@ -523,13 +770,11 @@ export default function MeetingRoomPage() {
                     </div>
                   )}
 
-                  {/* Top Notification Badge for Waiting */}
                   <div className="absolute top-6 left-1/2 transform -translate-x-1/2 bg-zinc-950/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 flex items-center gap-2.5 shadow-xl text-xs font-bold">
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-                    <span>Waiting for {role === "candidate" ? "recruiter" : "candidate"} to join...</span>
+                    <span>Waiting for other participants to join the meeting...</span>
                   </div>
 
-                  {/* Self Label Badge */}
                   <div className="absolute bottom-6 left-6 bg-zinc-950/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
                     <span className="text-xs font-bold">You ({displayName})</span>
@@ -538,84 +783,45 @@ export default function MeetingRoomPage() {
                   </div>
                 </div>
               ) : (
-                /* DUAL MODE: Both participants present in room */
-                <div className="w-full h-full relative flex items-center justify-center">
-                  {/* MAIN BIG VIEW: Remote Participant (or Swapped to Local) */}
-                  {!swappedLayout ? (
-                    /* Default: Remote Participant is BIG view */
-                    <div className="w-full h-full relative flex items-center justify-center bg-zinc-900">
-                      <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                      <div className="absolute bottom-6 left-6 bg-zinc-950/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                        <span className="text-xs font-extrabold">{remoteName} ({remoteRoleLabel})</span>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Swapped: Local Participant is BIG view */
-                    <div className="w-full h-full relative flex items-center justify-center bg-zinc-900">
-                      <video
-                        ref={localVideoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className={`w-full h-full object-cover transform -scale-x-100 ${camEnabled ? "block" : "hidden"}`}
-                      />
-                      {!camEnabled && (
-                        <div className="flex flex-col items-center gap-2 text-zinc-500">
-                          <CameraOff className="h-16 w-16" />
-                          <span className="text-xs font-bold">Your camera is off</span>
-                        </div>
-                      )}
-                      <div className="absolute bottom-6 left-6 bg-zinc-950/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-2">
-                        <span className="text-xs font-bold">You ({displayName})</span>
-                        {!micEnabled && <MicOff className="h-3.5 w-3.5 text-red-400" />}
-                        {handRaised && <span className="text-xs">✋</span>}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* FLOATING PIP INSET WINDOW (Small view in bottom right) */}
-                  <div
-                    onClick={() => setSwappedLayout(!swappedLayout)}
-                    title="Click to swap layout"
-                    className="w-48 sm:w-64 h-36 sm:h-44 rounded-2xl border-2 border-white/20 shadow-2xl overflow-hidden absolute bottom-6 right-6 z-20 bg-zinc-950 group cursor-pointer hover:border-indigo-500 transition-all duration-200"
-                  >
-                    {!swappedLayout ? (
-                      /* Small PiP: Local Participant */
-                      <div className="w-full h-full relative flex items-center justify-center">
-                        <video
-                          ref={localVideoRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          className={`w-full h-full object-cover transform -scale-x-100 ${camEnabled ? "block" : "hidden"}`}
-                        />
-                        {!camEnabled && (
-                          <div className="flex flex-col items-center gap-1 text-zinc-500">
-                            <CameraOff className="h-6 w-6" />
-                            <span className="text-[10px] font-bold">Cam Off</span>
-                          </div>
-                        )}
-                        <div className="absolute bottom-2 left-2 bg-zinc-950/85 backdrop-blur-xs px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1.5 border border-white/10">
-                          <span>You</span>
-                          {!micEnabled && <MicOff className="h-3 w-3 text-red-400" />}
-                          {handRaised && <span>✋</span>}
-                        </div>
-                      </div>
-                    ) : (
-                      /* Small PiP: Remote Participant */
-                      <div className="w-full h-full relative flex items-center justify-center">
-                        <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                        <div className="absolute bottom-2 left-2 bg-zinc-950/85 backdrop-blur-xs px-2.5 py-1 rounded-xl text-[10px] font-bold border border-white/10">
-                          {remoteName.split(" ")[0]} ({remoteRoleLabel})
-                        </div>
+                /* MULTI-PARTICIPANT GRID (1 Tile for Local + 1 Tile per Remote Peer) */
+                <div
+                  className={`w-full h-full grid gap-4 ${
+                    remotePeers.length === 1
+                      ? "grid-cols-1 md:grid-cols-2"
+                      : remotePeers.length <= 3
+                      ? "grid-cols-1 md:grid-cols-2"
+                      : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                  }`}
+                >
+                  {/* Tile 1: Local Participant */}
+                  <div className="relative rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl flex items-center justify-center min-h-[200px] w-full h-full">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={`w-full h-full object-cover transform -scale-x-100 ${camEnabled ? "block" : "hidden"}`}
+                    />
+                    {!camEnabled && (
+                      <div className="flex flex-col items-center gap-2 text-zinc-500">
+                        <CameraOff className="h-12 w-12 text-zinc-600" />
+                        <span className="text-xs font-bold text-zinc-400">Camera Off</span>
                       </div>
                     )}
-
-                    <div className="absolute top-2 right-2 bg-black/60 p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                      <RefreshCw className="h-3.5 w-3.5 text-white" />
+                    <div className="absolute bottom-4 left-4 bg-zinc-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/10 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                      <span className="text-xs font-extrabold text-white">You ({displayName})</span>
+                      {!micEnabled && <MicOff className="h-3.5 w-3.5 text-red-400" />}
+                      {handRaised && <span className="text-xs">✋</span>}
                     </div>
                   </div>
+
+                  {/* Remote Participant Tiles */}
+                  {remotePeers.map((peer) => (
+                    <div key={peer.peerId} className="w-full h-full">
+                      <RemotePeerTile peer={peer} />
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

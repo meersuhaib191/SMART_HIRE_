@@ -106,61 +106,58 @@ export default function CreateJobPage() {
         let activeCompanyId = recruiter?.company_id;
         let activeRecruiterId = recruiter?.id;
 
-        if (!recruiter || !recruiter.company_id) {
-          const savedProfileKey = `smarthire_active_recruiter_profile_${user.id}`;
-          const savedProfile = localStorage.getItem(savedProfileKey) || localStorage.getItem("smarthire_active_recruiter_profile");
-          let compName = "";
-          let compDomain = "";
-          let compIndustry = "Technology";
-
-          if (savedProfile) {
-            try {
-              const parsed = JSON.parse(savedProfile);
-              if (parsed.companyName) compName = parsed.companyName;
-              if (parsed.companyDomain) compDomain = parsed.companyDomain;
-              if (parsed.companyIndustry) compIndustry = parsed.companyIndustry;
-            } catch (e) {
-              logger.error("Failed to parse saved specs for job wizard", e);
+        if (!activeCompanyId) {
+          // Fetch existing user companies via API
+          const compRes = await fetch("/api/organization/companies").catch(() => null);
+          if (compRes && compRes.ok) {
+            const { data: compList } = await compRes.json();
+            if (Array.isArray(compList) && compList.length > 0 && compList[0]?.id) {
+              activeCompanyId = compList[0].id;
             }
           }
 
-          if (compName) {
-            const { data: newComp } = await supabase
-              .schema("organization")
-              .from("companies")
-              .insert({
-                name: compName,
-                domain: compDomain || null,
-                industry: compIndustry || null,
-              })
-              .select("id")
-              .single();
+          if (!activeCompanyId) {
+            const savedProfileKey = `smarthire_active_recruiter_profile_${user.id}`;
+            const savedProfile = localStorage.getItem(savedProfileKey);
+            let compName = "";
+            let compDomain = "";
+            let compIndustry = "Technology";
 
-            if (newComp) {
-              activeCompanyId = newComp.id;
-              const { data: newRec } = await supabase
-                .schema("organization")
-                .from("recruiters")
-                .upsert({
-                  user_id: user.id,
-                  company_id: newComp.id,
-                  role: "recruiter",
-                }, { onConflict: "user_id" })
-                .select("id")
-                .single();
-
-              if (newRec) {
-                activeRecruiterId = newRec.id;
+            if (savedProfile) {
+              try {
+                const parsed = JSON.parse(savedProfile);
+                if (parsed.companyName) compName = parsed.companyName;
+                if (parsed.companyDomain) compDomain = parsed.companyDomain;
+                if (parsed.companyIndustry) compIndustry = parsed.companyIndustry;
+              } catch (e) {
+                logger.error("Failed to parse saved specs for job wizard", e);
               }
             }
-          } else {
-            router.push("/recruiter/profile");
-            return;
+
+            if (!compName) {
+              const metaFirst = user.user_metadata?.first_name || "";
+              compName = user.user_metadata?.company_name || (metaFirst ? `${metaFirst}'s Workspace` : "Corporate Workspace");
+            }
+
+            const createRes = await fetch("/api/organization/companies", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: compName, domain: compDomain || undefined, industry: compIndustry || "Technology" }),
+            }).catch(() => null);
+
+            if (createRes && createRes.ok) {
+              const { data: newComp } = await createRes.json();
+              if (newComp?.id) {
+                activeCompanyId = newComp.id;
+              }
+            }
           }
         }
 
-        if (activeCompanyId && activeRecruiterId) {
+        if (activeCompanyId) {
           setCompanyId(activeCompanyId);
+        }
+        if (activeRecruiterId) {
           setValue("recruiterId", activeRecruiterId);
         }
       } catch (err) {
@@ -219,7 +216,41 @@ export default function CreateJobPage() {
   });
 
   const handleCreateWithStatus = async (targetStatus: "draft" | "published") => {
-    if (!companyId) return;
+    let activeCompanyId = companyId;
+    if (!activeCompanyId) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const compRes = await fetch("/api/organization/companies").catch(() => null);
+          if (compRes && compRes.ok) {
+            const { data: compList } = await compRes.json();
+            if (Array.isArray(compList) && compList.length > 0 && compList[0]?.id) {
+              activeCompanyId = compList[0].id;
+              setCompanyId(activeCompanyId);
+            }
+          }
+
+          if (!activeCompanyId) {
+            const compName = user.user_metadata?.company_name || `${user.user_metadata?.first_name || 'Corporate'}'s Workspace`;
+            const createRes = await fetch("/api/organization/companies", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: compName, industry: "Technology" }),
+            }).catch(() => null);
+
+            if (createRes && createRes.ok) {
+              const { data: newComp } = await createRes.json();
+              if (newComp?.id) {
+                activeCompanyId = newComp.id;
+                setCompanyId(newComp.id);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        logger.error("Failed auto-creating company on submit", e);
+      }
+    }
 
     if (targetStatus === "published") {
       if (!applicationDeadline) {
@@ -249,7 +280,7 @@ export default function CreateJobPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          companyId,
+          companyId: activeCompanyId || undefined,
           recruiterId: values.recruiterId || undefined,
           title: values.title || "Untitled Job",
           description: fullDescription || "Job Description",
@@ -264,7 +295,7 @@ export default function CreateJobPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         throw new Error(data.message || data.error || "Failed to create job posting");
       }
 
@@ -612,7 +643,7 @@ export default function CreateJobPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  disabled={loading || !companyId}
+                  disabled={loading}
                   onClick={() => handleCreateWithStatus("draft")}
                   className="px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-bold text-xs transition-colors cursor-pointer border border-zinc-300 disabled:opacity-50"
                 >
@@ -620,7 +651,7 @@ export default function CreateJobPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={loading || !companyId}
+                  disabled={loading}
                   onClick={() => handleCreateWithStatus("published")}
                   className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs transition-colors cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
                 >

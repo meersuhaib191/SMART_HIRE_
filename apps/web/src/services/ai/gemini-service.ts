@@ -19,10 +19,10 @@ export interface GeminiServiceResponse<T> {
 }
 
 const DEFAULT_GEMINI_MODELS = [
-  "gemini-flash-latest",
   "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
+  "gemini-1.5-flash-latest",
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
 ];
 
 function getModelHierarchy(): string[] {
@@ -90,7 +90,7 @@ export async function generateStructuredGeminiResponse<T>(params: {
   }
 
   const modelsToTry = getModelHierarchy();
-  const timeoutMs = params.timeoutMs || 12000;
+  const timeoutMs = params.timeoutMs || 5000;
   let lastErrorCategory: GeminiErrorCategory = "GEMINI_UNKNOWN_ERROR";
   let lastErrorMessage = "Failed to communicate with Gemini API.";
 
@@ -130,11 +130,11 @@ export async function generateStructuredGeminiResponse<T>(params: {
         } else if (response.status === 429) {
           lastErrorCategory = "GEMINI_RATE_LIMITED";
           lastErrorMessage = "Gemini API rate limit or quota exceeded (HTTP 429).";
-          continue; // Try fallback model
+          break; // Don't retry quota exceeded
         } else if (response.status === 404) {
           lastErrorCategory = "GEMINI_MODEL_ERROR";
-          lastErrorMessage = `Model ${modelName} not available (HTTP 404).`;
-          continue; // Try fallback model
+          lastErrorMessage = `Model ${modelName} not found (HTTP 404).`;
+          continue; // Try next model if 404
         } else {
           lastErrorCategory = "GEMINI_UNKNOWN_ERROR";
           lastErrorMessage = `HTTP ${response.status} error from Gemini provider.`;

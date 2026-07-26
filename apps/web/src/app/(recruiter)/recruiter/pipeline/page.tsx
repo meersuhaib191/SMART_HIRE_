@@ -848,23 +848,41 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
     const loadJobsList = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
+        let userCompanyId: string | null = null;
+        let userRecruiterId: string | null = null;
+
+        if (user) {
+          const { data: recruiter } = await supabase
+            .schema("organization")
+            .from("recruiters")
+            .select("id, company_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (recruiter) {
+            userRecruiterId = recruiter.id;
+            if (recruiter.company_id) {
+              userCompanyId = recruiter.company_id;
+            }
+          }
+        }
+
+        if (!userCompanyId && !userRecruiterId) {
+          setJobs([]);
+          setSelectedJobId("");
+          return;
+        }
+
         let query = supabase
           .schema("job")
           .from("jobs")
           .select("id, title, created_at, company_id")
           .is("deleted_at", null);
 
-        if (user) {
-          const { data: recruiter } = await supabase
-            .schema("organization")
-            .from("recruiters")
-            .select("company_id")
-            .eq("user_id", user.id)
-            .maybeSingle();
-
-          if (recruiter?.company_id) {
-            query = query.eq("company_id", recruiter.company_id);
-          }
+        if (userCompanyId) {
+          query = query.eq("company_id", userCompanyId);
+        } else if (userRecruiterId) {
+          query = query.eq("recruiter_id", userRecruiterId);
         }
 
         const { data } = await query.order("created_at", { ascending: false });

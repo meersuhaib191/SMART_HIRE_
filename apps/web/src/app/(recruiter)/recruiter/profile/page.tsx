@@ -105,9 +105,14 @@ export default function RecruiterProfilePage() {
           }
         }
 
+        // Clean up legacy un-scoped local profile if present
+        try {
+          localStorage.removeItem("smarthire_active_recruiter_profile");
+        } catch {}
+
         // Check user-scoped saved local profile specs
         const savedProfileKey = `smarthire_active_recruiter_profile_${user.id}`;
-        const savedProfile = localStorage.getItem(savedProfileKey) || localStorage.getItem("smarthire_active_recruiter_profile");
+        const savedProfile = localStorage.getItem(savedProfileKey);
         if (savedProfile) {
           try {
             const parsed = JSON.parse(savedProfile);
@@ -230,7 +235,6 @@ export default function RecruiterProfilePage() {
 
       const savedProfileKey = `smarthire_active_recruiter_profile_${authUser.id}`;
       safeSetLocalStorage(savedProfileKey, activeSpecs);
-      safeSetLocalStorage("smarthire_active_recruiter_profile", activeSpecs);
 
       // 1. Update Supabase Auth metadata & identity table
       try {
@@ -240,7 +244,7 @@ export default function RecruiterProfilePage() {
             last_name: recruiterLastName.trim(),
             full_name: `${recruiterFirstName.trim()} ${recruiterLastName.trim()}`.trim(),
             company_name: companyName.trim(),
-            avatar_url: recruiterAvatar || null,
+            avatar_url: recruiterAvatar?.startsWith("http") ? recruiterAvatar : null,
           }
         });
 
@@ -274,27 +278,35 @@ export default function RecruiterProfilePage() {
           })
           .eq("id", activeCompanyId);
       } else {
-        const { data: newComp, error: compErr } = await supabase
-          .schema("organization")
-          .from("companies")
-          .insert({
-            name: companyName.trim(),
-            domain: companyDomain.trim() || null,
-            industry: companyIndustry.trim() || null,
-            company_size: companySize || null,
-            description: companyDescription.trim() || null,
-            location: companyLocation.trim() || null,
-          })
-          .select("id")
-          .single();
+        const compSlug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "company";
+        const uniqueSlug = `${compSlug}-${Math.random().toString(36).substring(2, 7)}`;
 
-        if (compErr) {
-          logger.error("Error creating company", compErr);
-        }
+        try {
+          const apiRes = await fetch("/api/organization/companies", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: companyName.trim(),
+              slug: uniqueSlug,
+              domain: companyDomain.trim() || null,
+              industry: companyIndustry.trim() || null,
+              companySize: companySize || null,
+              description: companyDescription.trim() || null,
+            }),
+          });
 
-        if (newComp) {
-          activeCompanyId = newComp.id;
-          setCompanyId(newComp.id);
+          if (apiRes.ok) {
+            const apiJson = await apiRes.json().catch(() => ({}));
+            if (apiJson.data?.id) {
+              activeCompanyId = apiJson.data.id;
+              setCompanyId(apiJson.data.id);
+            }
+          } else {
+            const errText = await apiRes.text().catch(() => "");
+            logger.error(`API failed creating company: ${errText}`);
+          }
+        } catch (e) {
+          logger.error("Error calling company creation API", e);
         }
       }
 

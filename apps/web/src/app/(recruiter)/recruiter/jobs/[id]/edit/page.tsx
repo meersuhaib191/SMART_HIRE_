@@ -25,6 +25,7 @@ const editJobSchema = z.object({
   description: z.string().min(1, "Job description content is required"),
   category: z.string().max(100).optional().nullable(),
   status: z.enum(["draft", "published", "closed"]),
+  applicationDeadline: z.string().optional().nullable(),
 });
 
 type EditJobValues = z.infer<typeof editJobSchema>;
@@ -67,6 +68,13 @@ export default function EditJobPage() {
         setValue("category", job.category || "");
         setValue("status", job.status);
 
+        if (job.application_deadline) {
+          const d = new Date(job.application_deadline);
+          const tzOffset = d.getTimezoneOffset() * 60000;
+          const localIso = new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+          setValue("applicationDeadline", localIso);
+        }
+
         // Fetch company departments
         if (job.company_id) {
           const { data: depts } = await orgClient
@@ -103,6 +111,7 @@ export default function EditJobPage() {
           description: values.description,
           category: values.category || null,
           status: values.status,
+          applicationDeadline: values.applicationDeadline ? new Date(values.applicationDeadline).toISOString() : null,
         }),
       });
 
@@ -142,7 +151,7 @@ export default function EditJobPage() {
             Edit Job Posting
           </h1>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Modify job requirements, description, and hiring pipeline status.
+            Modify job requirements, description, application deadline, and hiring pipeline status.
           </p>
         </div>
         <Button
@@ -210,7 +219,7 @@ export default function EditJobPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
             <div className="space-y-1.5 w-full">
               <label htmlFor="experienceLevel" className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
                 Experience Level
@@ -229,22 +238,6 @@ export default function EditJobPage() {
               </select>
             </div>
 
-            <div className="space-y-1.5 w-full">
-              <label htmlFor="status" className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
-                Posting Status
-              </label>
-              <select
-                id="status"
-                disabled={saving}
-                className="w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 focus:border-blue-600 focus:outline-none transition-colors font-medium"
-                {...register("status")}
-              >
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="closed">Closed / Archived</option>
-              </select>
-            </div>
-
             <FormField
               label="Location"
               id="location"
@@ -253,6 +246,44 @@ export default function EditJobPage() {
               disabled={saving}
               {...register("location")}
             />
+          </div>
+
+          {/* Application Deadline & Posting Status Panel */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left p-4 bg-zinc-50 border border-zinc-200 rounded-xl">
+            <div className="space-y-1.5 w-full">
+              <label htmlFor="applicationDeadline" className="text-xs font-bold text-zinc-900 uppercase tracking-wider block">
+                Application Deadline
+              </label>
+              <p className="text-[11px] text-zinc-500 font-medium">
+                Set or extend the deadline date/time for candidate applications.
+              </p>
+              <input
+                type="datetime-local"
+                id="applicationDeadline"
+                disabled={saving}
+                className="w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-xs font-bold text-zinc-900 focus:border-blue-600 focus:outline-none transition-colors"
+                {...register("applicationDeadline")}
+              />
+            </div>
+
+            <div className="space-y-1.5 w-full">
+              <label htmlFor="status" className="text-xs font-bold text-zinc-700 uppercase tracking-wider block">
+                Posting Status
+              </label>
+              <p className="text-[11px] text-zinc-500 font-medium">
+                Manage position lifecycle & application visibility.
+              </p>
+              <select
+                id="status"
+                disabled={saving}
+                className="w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-xs font-bold text-zinc-900 focus:border-blue-600 focus:outline-none transition-colors"
+                {...register("status")}
+              >
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="closed">Closed / Archived</option>
+              </select>
+            </div>
           </div>
 
           <FormField

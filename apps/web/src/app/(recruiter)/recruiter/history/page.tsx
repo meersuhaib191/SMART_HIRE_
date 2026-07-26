@@ -44,13 +44,45 @@ export default function RecruiterHiringHistoryPage() {
   React.useEffect(() => {
     const fetchHiringHistory = async () => {
       try {
-        // Fetch all job postings from job.jobs
-        const { data: jobs, error: jobErr } = await supabase
+        const { data: { user } } = await supabase.auth.getUser();
+        let userCompanyId: string | null = null;
+        let userRecruiterId: string | null = null;
+
+        if (user) {
+          const { data: recruiter } = await supabase
+            .schema("organization")
+            .from("recruiters")
+            .select("id, company_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (recruiter) {
+            userRecruiterId = recruiter.id;
+            if (recruiter.company_id) {
+              userCompanyId = recruiter.company_id;
+            }
+          }
+        }
+
+        if (!userCompanyId && !userRecruiterId) {
+          setJobHistory([]);
+          setLoading(false);
+          return;
+        }
+
+        let query = supabase
           .schema("job")
           .from("jobs")
           .select("id, title, category, location, status, created_at, company_id")
-          .is("deleted_at", null)
-          .order("created_at", { ascending: false });
+          .is("deleted_at", null);
+
+        if (userCompanyId) {
+          query = query.eq("company_id", userCompanyId);
+        } else if (userRecruiterId) {
+          query = query.eq("recruiter_id", userRecruiterId);
+        }
+
+        const { data: jobs, error: jobErr } = await query.order("created_at", { ascending: false });
 
         if (jobErr) throw jobErr;
 

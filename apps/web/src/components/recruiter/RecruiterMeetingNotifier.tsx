@@ -49,8 +49,14 @@ export function RecruiterMeetingNotifier() {
 
       const companyId = recruiter?.company_id;
 
-      // 2. Fetch interviews in scheduled or in-progress status
-      let query = supabase
+      // If user does not belong to a company, clear meeting notice & exit
+      if (!companyId) {
+        setMeeting(null);
+        return;
+      }
+
+      // 2. Fetch interviews in scheduled or in-progress status for THIS company
+      const { data: ints } = await supabase
         .schema("interview")
         .from("interviews")
         .select(`
@@ -63,17 +69,20 @@ export function RecruiterMeetingNotifier() {
           status,
           candidate_id
         `)
+        .eq("company_id", companyId)
         .in("status", ["scheduled", "in-progress"])
         .order("start_time", { ascending: true });
 
-      if (companyId) {
-        query = query.eq("company_id", companyId);
-      }
+      const now = Date.now();
+      const validInts = (ints || []).filter((i) => {
+        if (i.status === "in-progress") return true;
+        if (!i.start_time) return false;
+        const startTime = new Date(i.start_time).getTime();
+        return startTime >= now - 15 * 60000 && startTime <= now + 2 * 3600000;
+      });
 
-      const { data: ints } = await query;
-
-      if (ints && ints.length > 0) {
-        const firstInt = ints[0];
+      if (validInts && validInts.length > 0) {
+        const firstInt = validInts[0];
 
         // Fetch application & job title & candidate details
         const { data: app } = await supabase
@@ -125,57 +134,8 @@ export function RecruiterMeetingNotifier() {
         return;
       }
 
-      // 3. Fallback: check candidate applications in zoom_interview status
-      let appQuery = supabase
-        .schema("application")
-        .from("applications")
-        .select("id, job_id, candidate_id, interview_scheduled_at")
-        .eq("status", "zoom_interview")
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      const { data: zoomApps } = await appQuery;
-      if (zoomApps && zoomApps.length > 0) {
-        const appRow = zoomApps[0];
-
-        let jobTitle = "Full Stack Position";
-        if (appRow.job_id) {
-          const { data: job } = await supabase
-            .schema("job")
-            .from("jobs")
-            .select("title")
-            .eq("id", appRow.job_id)
-            .maybeSingle();
-          if (job?.title) jobTitle = job.title;
-        }
-
-        let candName = "Candidate";
-        let candEmail = "";
-        if (appRow.candidate_id) {
-          const { data: cand } = await supabase
-            .schema("candidate")
-            .from("candidates")
-            .select("first_name, last_name, email")
-            .eq("id", appRow.candidate_id)
-            .maybeSingle();
-          if (cand) {
-            candName = `${cand.first_name || ""} ${cand.last_name || ""}`.trim() || "Candidate";
-            candEmail = cand.email || "";
-          }
-        }
-
-        const fallbackToken = `smh_meet_app_int_${appRow.id}`;
-        setMeeting({
-          id: `app_${appRow.id}`,
-          meetingToken: fallbackToken,
-          jobTitle,
-          candidateName: candName,
-          candidateEmail: candEmail,
-          startTime: appRow.interview_scheduled_at || new Date().toISOString(),
-          durationMinutes: 60,
-          status: "scheduled",
-        });
-      }
+      // No active upcoming meeting for this recruiter
+      setMeeting(null);
     } catch (err) {
       logger.warn("[RecruiterMeetingNotifier] Fetch error", err);
     }

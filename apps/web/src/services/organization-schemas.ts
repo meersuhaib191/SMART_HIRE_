@@ -5,13 +5,9 @@ import { z } from "zod";
  */
 export const createCompanySchema = z.object({
   name: z.string().min(1, "Company name is required").max(255),
-  slug: z
-    .string()
-    .min(1, "Slug is required")
-    .max(255)
-    .regex(/^[a-z0-9-]+$/, "Slug must be URL-friendly (lowercase, numbers, and dashes only)"),
+  slug: z.string().optional().nullable(),
   domain: z.string().max(255).optional().nullable(),
-  logoUrl: z.string().url("Invalid logo URL format").max(512).optional().nullable(),
+  logoUrl: z.string().url("Invalid logo URL format").or(z.literal("")).optional().nullable(),
   // Onboarding Fields
   industry: z.string().max(100).optional().nullable(),
   companySize: z.string().max(50).optional().nullable(),
@@ -19,7 +15,7 @@ export const createCompanySchema = z.object({
   email: z.string().email("Invalid email format").or(z.literal("")).optional().nullable(),
   timezone: z.string().max(100).optional().nullable(),
   description: z.string().optional().nullable(),
-  bannerUrl: z.string().url("Invalid banner URL format").max(512).optional().nullable(),
+  bannerUrl: z.string().url("Invalid banner URL format").or(z.literal("")).optional().nullable(),
   country: z.string().max(100).optional().nullable(),
   state: z.string().max(100).optional().nullable(),
   city: z.string().max(100).optional().nullable(),

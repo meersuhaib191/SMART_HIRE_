@@ -119,7 +119,74 @@ export default function CandidatesPage() {
   const fetchCandidates = React.useCallback(async () => {
     setLoading(true);
     try {
-      let query = supabase.schema("candidate").from("candidates").select("*").is("deleted_at", null);
+      const { data: { user } } = await supabase.auth.getUser();
+      let userCompanyId: string | null = null;
+      let userRecruiterId: string | null = null;
+
+      if (user) {
+        const { data: recruiter } = await supabase
+          .schema("organization")
+          .from("recruiters")
+          .select("id, company_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (recruiter) {
+          userRecruiterId = recruiter.id;
+          if (recruiter.company_id) {
+            userCompanyId = recruiter.company_id;
+          }
+        }
+      }
+
+      if (!userCompanyId && !userRecruiterId) {
+        setCandidates([]);
+        setLoading(false);
+        return;
+      }
+
+      let jobsQuery = supabase
+        .schema("job")
+        .from("jobs")
+        .select("id")
+        .is("deleted_at", null);
+
+      if (userCompanyId) {
+        jobsQuery = jobsQuery.eq("company_id", userCompanyId);
+      } else if (userRecruiterId) {
+        jobsQuery = jobsQuery.eq("recruiter_id", userRecruiterId);
+      }
+
+      const { data: userJobs } = await jobsQuery;
+      const jobIds = (userJobs || []).map((j) => j.id);
+
+      if (jobIds.length === 0) {
+        setCandidates([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: jobApps } = await supabase
+        .schema("application")
+        .from("applications")
+        .select("candidate_id")
+        .in("job_id", jobIds)
+        .is("deleted_at", null);
+
+      const candidateIds = [...new Set((jobApps || []).map((a) => a.candidate_id))];
+
+      if (candidateIds.length === 0) {
+        setCandidates([]);
+        setLoading(false);
+        return;
+      }
+
+      let query = supabase
+        .schema("candidate")
+        .from("candidates")
+        .select("*")
+        .in("id", candidateIds)
+        .is("deleted_at", null);
 
       if (location) {
         query = query.ilike("location", `%${location}%`);

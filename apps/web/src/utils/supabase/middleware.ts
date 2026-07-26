@@ -30,7 +30,7 @@ export async function updateSession(request: NextRequest) {
           supabaseResponse.cookies.set(name, value, {
             ...options,
             sameSite: "lax",
-            secure: true,
+            secure: process.env.NODE_ENV === "production",
           })
         );
       },

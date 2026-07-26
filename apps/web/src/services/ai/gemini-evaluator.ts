@@ -101,7 +101,7 @@ Return ONLY valid JSON matching this schema:
 
   const result = await generateStructuredGeminiResponse<RawGeminiOutput>({
     prompt,
-    timeoutMs: 15000,
+    timeoutMs: 4000,
     temperature: 0.2,
   });
 

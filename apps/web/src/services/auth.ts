@@ -55,6 +55,15 @@ export const authService = {
    */
   signOut: async () => {
     logger.info("Signing out current session");
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("smarthire_active_recruiter_profile");
+        localStorage.removeItem("smarthire_onboarding_company_info");
+        localStorage.removeItem("smarthire_onboarding_company_id");
+      } catch {
+        // Ignore storage errors on signout
+      }
+    }
     const res = await fetch("/api/auth/logout", {
       method: "POST",
     });

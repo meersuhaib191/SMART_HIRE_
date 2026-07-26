@@ -64,17 +64,21 @@ export default function JobsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       let userCompanyId: string | null = null;
+      let userRecruiterId: string | null = null;
 
       if (user) {
         const { data: recruiter } = await supabase
           .schema("organization")
           .from("recruiters")
-          .select("company_id")
+          .select("id, company_id")
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (recruiter?.company_id) {
-          userCompanyId = recruiter.company_id;
+        if (recruiter) {
+          userRecruiterId = recruiter.id;
+          if (recruiter.company_id) {
+            userCompanyId = recruiter.company_id;
+          }
         }
       }
 
@@ -84,8 +88,15 @@ export default function JobsPage() {
         .select("*")
         .is("deleted_at", null);
 
-      if (userCompanyId) {
+      if (userRecruiterId) {
+        query = query.eq("recruiter_id", userRecruiterId);
+      } else if (userCompanyId) {
         query = query.eq("company_id", userCompanyId);
+      } else {
+        setJobs([]);
+        setTotalApps(0);
+        setLoading(false);
+        return;
       }
       if (status) {
         query = query.eq("status", status);

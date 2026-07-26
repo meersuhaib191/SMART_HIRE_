@@ -53,11 +53,59 @@ export default function RecruiterInterviewsPage() {
   React.useEffect(() => {
     const fetchAllInterviews = async () => {
       try {
-        // 1. Fetch applications in application schema
+        const { data: { user } } = await supabase.auth.getUser();
+        let userCompanyId: string | null = null;
+        let userRecruiterId: string | null = null;
+
+        if (user) {
+          const { data: recruiter } = await supabase
+            .schema("organization")
+            .from("recruiters")
+            .select("id, company_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (recruiter) {
+            userRecruiterId = recruiter.id;
+            if (recruiter.company_id) {
+              userCompanyId = recruiter.company_id;
+            }
+          }
+        }
+
+        if (!userCompanyId && !userRecruiterId) {
+          setInterviews([]);
+          setLoading(false);
+          return;
+        }
+
+        let jobsQuery = supabase
+          .schema("job")
+          .from("jobs")
+          .select("id")
+          .is("deleted_at", null);
+
+        if (userCompanyId) {
+          jobsQuery = jobsQuery.eq("company_id", userCompanyId);
+        } else if (userRecruiterId) {
+          jobsQuery = jobsQuery.eq("recruiter_id", userRecruiterId);
+        }
+
+        const { data: userJobs } = await jobsQuery;
+        const jobIds = (userJobs || []).map((j) => j.id);
+
+        if (jobIds.length === 0) {
+          setInterviews([]);
+          setLoading(false);
+          return;
+        }
+
+        // 1. Fetch applications in application schema for user's jobs
         const { data: candApps } = await supabase
           .schema("application")
           .from("applications")
           .select("id, candidate_id, job_id, status, interview_scheduled_at, created_at")
+          .in("job_id", jobIds)
           .is("deleted_at", null);
 
         const appList = candApps || [];
@@ -94,14 +142,14 @@ export default function RecruiterInterviewsPage() {
         }
 
         // 4. Fetch jobs list
-        const jobIds = [...new Set(appList.map((a) => a.job_id))];
+        const targetJobIds = [...new Set(appList.map((a) => a.job_id))];
         let jobsList: { id: string; title: string }[] = [];
-        if (jobIds.length > 0) {
+        if (targetJobIds.length > 0) {
           const { data: jData } = await supabase
             .schema("job")
             .from("jobs")
             .select("id, title")
-            .in("id", jobIds);
+            .in("id", targetJobIds);
           jobsList = jData || [];
         }
 

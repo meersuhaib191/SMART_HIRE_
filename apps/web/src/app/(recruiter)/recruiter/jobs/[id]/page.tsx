@@ -64,7 +64,7 @@ export default function JobOverviewPage() {
           }));
 
           const savedProfileKey = `smarthire_active_recruiter_profile_${user.id}`;
-          const savedProfile = localStorage.getItem(savedProfileKey) || localStorage.getItem("smarthire_active_recruiter_profile");
+          const savedProfile = localStorage.getItem(savedProfileKey);
           if (savedProfile) {
             try {
               const parsed = JSON.parse(savedProfile);

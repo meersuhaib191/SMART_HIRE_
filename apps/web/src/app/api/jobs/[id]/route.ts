@@ -12,7 +12,14 @@ interface RouteContext {
  */
 export async function GET(_request: NextRequest, { params }: RouteContext) {
   try {
-    const { id: jobId } = await params;
+    const resolvedParams = await Promise.resolve(params);
+    const rawJobId = resolvedParams?.id;
+    const jobId = rawJobId ? String(rawJobId).trim() : "";
+
+    if (!jobId) {
+      return NextResponse.json({ error: "Job ID is required" }, { status: 400 });
+    }
+
     logger.info(`API: Fetching details for job: ${jobId}`);
 
     const job = await jobService.getJobDetails(jobId);
