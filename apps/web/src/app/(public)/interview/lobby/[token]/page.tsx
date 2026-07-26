@@ -33,6 +33,7 @@ export default function MeetingLobbyPage() {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const audioContextRef = React.useRef<AudioContext | null>(null);
   const analyserRef = React.useRef<AnalyserNode | null>(null);
+  const animFrameRef = React.useRef<number | null>(null);
 
   // Fetch session metadata
   const fetchSessionData = React.useCallback(async () => {
@@ -84,7 +85,7 @@ export default function MeetingLobbyPage() {
       if (audioInputs.length > 0) setSelectedAudioId(audioInputs[0].deviceId);
       if (videoInputs.length > 0) setSelectedVideoId(videoInputs[0].deviceId);
 
-      // Audio Level Analyzer
+      // Audio Level Analyzer (Throttled to avoid Maximum update depth exceeded)
       try {
         const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
         const analyser = audioCtx.createAnalyser();
@@ -96,15 +97,20 @@ export default function MeetingLobbyPage() {
         analyserRef.current = analyser;
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const updateMeter = () => {
+        let lastTime = 0;
+        const updateMeter = (now: number) => {
           if (!analyserRef.current) return;
-          analyserRef.current.getByteFrequencyData(dataArray);
-          const sum = dataArray.reduce((a, b) => a + b, 0);
-          const avg = sum / dataArray.length;
-          setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)));
-          requestAnimationFrame(updateMeter);
+          if (now - lastTime > 100) {
+            lastTime = now;
+            analyserRef.current.getByteFrequencyData(dataArray);
+            const sum = dataArray.reduce((a, b) => a + b, 0);
+            const avg = sum / dataArray.length;
+            const newLevel = Math.min(100, Math.round((avg / 128) * 100));
+            setAudioLevel((prev) => (Math.abs(prev - newLevel) > 3 ? newLevel : prev));
+          }
+          animFrameRef.current = requestAnimationFrame(updateMeter);
         };
-        updateMeter();
+        animFrameRef.current = requestAnimationFrame(updateMeter);
       } catch {
         // Audio meter fallback
       }
@@ -117,6 +123,7 @@ export default function MeetingLobbyPage() {
   React.useEffect(() => {
     initMedia();
     return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       stream?.getTracks().forEach((t) => t.stop());
       audioContextRef.current?.close();
     };
