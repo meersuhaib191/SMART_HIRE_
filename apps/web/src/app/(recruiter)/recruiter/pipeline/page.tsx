@@ -27,9 +27,8 @@ const techColumns = [
   { key: "coding", name: "4. IDE Coding Round" },
   { key: "interview", name: "5. AI Interview" },
   { key: "zoom_interview", name: "6. Recruiter Final Interview" },
-  { key: "hiring_decision", name: "7. Hiring Decision" },
-  { key: "offer_sent", name: "8. Offer" },
-  { key: "hired", name: "9. Hired / Joined" },
+  { key: "offer_sent", name: "7. Offer" },
+  { key: "hired", name: "8. Hired / Joined" },
 ];
 
 const nonTechColumns = [
@@ -38,9 +37,8 @@ const nonTechColumns = [
   { key: "mcq", name: "3. MCQ Exam" },
   { key: "interview", name: "4. AI Interview" },
   { key: "zoom_interview", name: "5. Recruiter Final Interview" },
-  { key: "hiring_decision", name: "6. Hiring Decision" },
-  { key: "offer_sent", name: "7. Offer" },
-  { key: "hired", name: "8. Hired / Joined" },
+  { key: "offer_sent", name: "6. Offer" },
+  { key: "hired", name: "7. Hired / Joined" },
 ];
 
 function PdfUploader({
@@ -894,8 +892,7 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
     if (s === "mcq" || s === "mcq_exam") return "mcq";
     if (s === "coding" || s === "ide_coding") return "coding";
     if (s === "interview" || s === "ai_interview" || s === "ai_room") return "interview";
-    if (s === "zoom_interview" || s === "recruiter_review" || s === "interview_scheduled" || s === "final_interview") return "zoom_interview";
-    if (s === "hiring_decision") return "hiring_decision";
+    if (s === "zoom_interview" || s === "recruiter_review" || s === "interview_scheduled" || s === "final_interview" || s === "hiring_decision") return "zoom_interview";
     if (s === "offer_sent" || s === "offered" || s === "offer" || s === "offer_accepted") return "offer_sent";
     if (s === "hired" || s === "joined") return "hired";
     return s;
