@@ -48,29 +48,31 @@ interface RemotePeer {
 
 function RemotePeerTile({ peer }: { peer: RemotePeer }) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const [hasVideo, setHasVideo] = React.useState(false);
+  const [hasVideoTrack, setHasVideoTrack] = React.useState(false);
 
   React.useEffect(() => {
     const el = videoRef.current;
     if (!el || !peer.stream) return;
 
     el.srcObject = peer.stream;
+    el.muted = false; // Ensures remote voice audio plays through speakers!
 
-    const checkTrack = () => {
-      const tracks = peer.stream.getVideoTracks();
-      const isLive = tracks.length > 0 && tracks.some((t) => t.enabled && t.readyState === "live");
-      setHasVideo(isLive);
-      if (videoRef.current) {
-        videoRef.current.play().catch(() => {});
+    const updateMediaState = () => {
+      const vTracks = peer.stream.getVideoTracks();
+      const isVideoLive = vTracks.length > 0 && vTracks.some((t) => t.enabled && t.readyState === "live");
+      setHasVideoTrack(isVideoLive);
+
+      if (el.paused) {
+        el.play().catch((err) => logger.warn("[RemotePeerTile] Autoplay failed:", err));
       }
     };
 
-    checkTrack();
+    updateMediaState();
 
-    peer.stream.onaddtrack = checkTrack;
-    peer.stream.onremovetrack = checkTrack;
+    peer.stream.onaddtrack = updateMediaState;
+    peer.stream.onremovetrack = updateMediaState;
 
-    const interval = setInterval(checkTrack, 1000);
+    const interval = setInterval(updateMediaState, 1000);
 
     return () => {
       clearInterval(interval);
@@ -85,21 +87,27 @@ function RemotePeerTile({ peer }: { peer: RemotePeer }) {
 
   return (
     <div className="relative rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl flex items-center justify-center min-h-[200px] w-full h-full">
+      {/* Video element ALWAYS stays visible in DOM so audio tracks play out loud */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className={`w-full h-full object-cover ${hasVideo ? "block" : "hidden"}`}
+        className="w-full h-full object-cover"
       />
-      {!hasVideo && (
-        <div className="flex flex-col items-center gap-2 text-zinc-500">
-          <div className="w-14 h-14 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-zinc-300 text-lg border border-zinc-700">
-            {peer.name ? peer.name[0] : "P"}
+
+      {/* Avatar overlay when video track is preparing or muted */}
+      {!hasVideoTrack && (
+        <div className="absolute inset-0 bg-zinc-900 flex flex-col items-center justify-center gap-3 z-10">
+          <div className="w-16 h-16 rounded-full bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 flex items-center justify-center font-black text-xl shadow-lg">
+            {peer.name ? peer.name[0].toUpperCase() : "P"}
           </div>
-          <span className="text-xs font-bold text-zinc-400">{peer.name} ({roleBadge})</span>
+          <span className="text-xs font-bold text-zinc-300">{peer.name} ({roleBadge})</span>
+          <span className="text-[10px] text-zinc-500 font-medium">Connecting video & audio...</span>
         </div>
       )}
-      <div className="absolute bottom-4 left-4 bg-zinc-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/10 flex items-center gap-2 z-10">
+
+      {/* Badge Overlay */}
+      <div className="absolute bottom-4 left-4 bg-zinc-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/10 flex items-center gap-2 z-20">
         <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
         <span className="text-xs font-extrabold text-white">{peer.name} ({roleBadge})</span>
       </div>
@@ -203,10 +211,23 @@ export default function MeetingRoomPage() {
         ],
       });
 
+      // Explicitly add sendrecv audio & video transceivers
+      try {
+        pc.addTransceiver("audio", { direction: "sendrecv" });
+        pc.addTransceiver("video", { direction: "sendrecv" });
+      } catch (e) {
+        logger.warn("[MeetingRoom] Transceiver creation warning", e);
+      }
+
       // Add local media tracks
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => {
-          pc.addTrack(track, localStreamRef.current!);
+          logger.info(`[MeetingRoom] Adding local track ${track.kind} to pc for ${targetName}`);
+          try {
+            pc.addTrack(track, localStreamRef.current!);
+          } catch (e) {
+            logger.warn("[MeetingRoom] addTrack warning", e);
+          }
         });
       }
 
@@ -369,9 +390,9 @@ export default function MeetingRoomPage() {
     };
   }, []);
 
-  // Multi-Participant Realtime Signaling Setup
+  // Multi-Participant Realtime Signaling Setup (Only after local stream is initialized)
   React.useEffect(() => {
-    if (!session) return;
+    if (!session || !stream) return;
 
     const roomId = session.interviewId || token;
     const channelName = `meeting-room-${roomId}`;
@@ -482,11 +503,11 @@ export default function MeetingRoomPage() {
       peersMapRef.current.clear();
       setRemotePeers([]);
     };
-  }, [session, token, role, displayName, createPeerConnectionForUser, removePeer]);
+  }, [session, stream, token, role, displayName, createPeerConnectionForUser, removePeer]);
 
   // Presence Heartbeat: Announce presence every 3s while waiting for peers
   React.useEffect(() => {
-    if (!session || remotePeers.length > 0) return;
+    if (!session || !stream || remotePeers.length > 0) return;
 
     const heartbeatTimer = setInterval(() => {
       if (channelRef.current) {
