@@ -362,28 +362,41 @@ export default function MeetingLobbyPage() {
         <div className="lg:col-span-5 space-y-6 bg-zinc-900 border border-zinc-800 p-6 rounded-3xl shadow-xl text-left">
           <div>
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-400 block mb-1">
-              Ready to Join
+              {role === "recruiter" ? "Recruiter Room Entrance" : "Candidate Meeting Lobby"}
             </span>
-            <h2 className="text-2xl font-black tracking-tight">{session.candidateName}</h2>
-            <p className="text-xs text-zinc-400 font-medium">{session.jobTitle} • Scheduled for {session.durationMinutes} minutes</p>
+            <h2 className="text-2xl font-black tracking-tight">
+              {role === "recruiter" ? session.candidateName : session.jobTitle}
+            </h2>
+            <p className="text-xs text-zinc-400 font-medium">
+              {session.jobTitle} • {session.durationMinutes} mins scheduled
+            </p>
           </div>
 
           <div className="space-y-3 pt-3 border-t border-zinc-800 text-xs">
             <div className="flex justify-between items-center py-1">
               <span className="text-zinc-400 font-medium">Scheduled Time:</span>
-              <span className="font-bold text-white">{new Date(session.scheduledAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
+              <span className="font-bold text-white">
+                {new Date(session.scheduledAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+              </span>
             </div>
 
             <div className="flex justify-between items-center py-1">
-              <span className="text-zinc-400 font-medium">Interviewer:</span>
+              <span className="text-zinc-400 font-medium">
+                {role === "recruiter" ? "Assigned Recruiter:" : "Interviewer:"}
+              </span>
               <span className="font-bold text-indigo-300">{session.interviewerName}</span>
+            </div>
+
+            <div className="flex justify-between items-center py-1">
+              <span className="text-zinc-400 font-medium">Candidate:</span>
+              <span className="font-bold text-white">{session.candidateName}</span>
             </div>
 
             <div className="flex justify-between items-center py-1">
               <span className="text-zinc-400 font-medium">Lobby Status:</span>
               <span className="font-bold text-emerald-400 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                {role === "recruiter" ? "Candidate is ready to join" : "Waiting for interviewer"}
+                {role === "recruiter" ? "Candidate ready for live interview" : "Ready to enter meeting room"}
               </span>
             </div>
           </div>
