@@ -2253,7 +2253,7 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
                           }
                         }}
                         onAdvance={handleAdvanceSingleCandidate}
-                        onReject={col.key === "offer_sent" ? undefined : (c) => handleRejectCandidate(c, col.key)}
+                        onReject={["offer_sent", "hired", "joined", "offered"].includes(col.key) || ["hired", "joined", "offer_accepted"].includes(card.status) ? undefined : (c) => handleRejectCandidate(c, col.key)}
                         onReinstate={(c) => handleReinstateCandidate(c, col.key)}
                         onFullScreen={(c) => {
                           markContextAsRead({ applicationId: c.id });

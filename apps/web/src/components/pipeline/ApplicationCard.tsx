@@ -293,7 +293,7 @@ export function ApplicationCard({
             </button>
           )}
 
-          {onReject && (
+          {onReject && !["hired", "joined", "offer_accepted"].includes(card.status) && (
             <button
               type="button"
               onClick={(e) => {
