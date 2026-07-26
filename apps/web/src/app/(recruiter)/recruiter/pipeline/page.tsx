@@ -785,13 +785,17 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
           const hashVal = app.id.charCodeAt(0) + app.id.charCodeAt(1);
           const priorityVal = hashVal % 3 === 0 ? "high" : hashVal % 3 === 1 ? "medium" : "low";
 
+          const rawCandName = cand ? `${cand.first_name || ""} ${cand.last_name || ""}`.trim() : "";
+          const finalCandName = rawCandName || (cand?.email ? cand.email.split("@")[0] : "Candidate");
+          const finalJobTitle = job?.title || activeJobDetails?.title || "Full Stack Web Developer";
+
           return {
             id: app.id,
             candidate_id: app.candidate_id,
-            candidate_name: cand ? `${cand.first_name} ${cand.last_name}` : "Jane Doe",
+            candidate_name: finalCandName,
             candidate_email: cand?.email || "",
-            headline: cand?.headline || "Applicant",
-            job_title: job ? job.title : "Position",
+            headline: cand?.headline || `${finalJobTitle} Applicant`,
+            job_title: finalJobTitle,
             status: app.status,
             rejection_stage: app.rejection_stage,
             created_at: app.created_at,
