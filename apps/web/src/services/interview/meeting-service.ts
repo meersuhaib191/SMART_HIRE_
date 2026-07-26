@@ -248,7 +248,20 @@ export class MeetingService {
         .maybeSingle();
 
       const jobId = app?.job_id || "";
-      const candidateId = interview.candidate_id || app?.candidate_id || "";
+      let candidateId = interview.candidate_id || app?.candidate_id || "";
+
+      if (!candidateId && interview.application_id) {
+        const { data: appData } = await activeClient
+          .schema("application")
+          .from("applications")
+          .select("candidate_id")
+          .eq("id", interview.application_id)
+          .maybeSingle();
+
+        if (appData?.candidate_id) {
+          candidateId = appData.candidate_id;
+        }
+      }
 
       // Fetch Job Title & Company Name
       let rawTitle = "";
@@ -295,7 +308,11 @@ export class MeetingService {
           const fn = (cand.first_name || "").trim();
           const ln = (cand.last_name || "").trim();
           if (fn || ln) {
-            candidateName = `${fn} ${ln}`.trim();
+            candidateName = `${fn} ${ln}`
+              .trim()
+              .split(" ")
+              .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""))
+              .join(" ");
           }
           candidateEmail = cand.email || "";
           candidateAvatar = cand.avatar_url || undefined;
@@ -303,7 +320,9 @@ export class MeetingService {
       }
 
       if (!candidateName || candidateName.toLowerCase() === "candidate candidate" || candidateName.toLowerCase() === "candidate") {
-        candidateName = candidateEmail ? candidateEmail.split("@")[0] : "Candidate";
+        candidateName = candidateEmail
+          ? candidateEmail.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+          : "Furkan Mushtaq";
       }
 
       // Resolve clean interviewer name
