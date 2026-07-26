@@ -88,7 +88,6 @@ export function JobTable({
             {jobs.map((job) => {
               const isSelected = selectedIds.includes(job.id);
               const isMenuOpen = activeMenuId === job.id;
-              const isDraft = job.status === "draft";
               const isClosed = job.status === "closed";
 
               return (
@@ -199,27 +198,33 @@ export function JobTable({
                             <MoreHorizontal className="h-4 w-4" />
                           </button>
                           {isMenuOpen && (
-                            <div className="sh-scale-in absolute right-0 mt-1.5 w-40 rounded-[14px] border border-[#D2D2D7] bg-white py-1.5 shadow-lg z-30 text-left">
-                              {isDraft && (
+                            <div className="sh-scale-in absolute right-0 mt-1.5 w-44 rounded-[14px] border border-[#D2D2D7] bg-white py-1.5 shadow-lg z-30 text-left">
+                              <Link
+                                href={`/recruiter/jobs/${job.id}/edit`}
+                                onClick={() => setActiveMenuId(null)}
+                                className="flex w-full px-4 py-2 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors font-medium"
+                              >
+                                Edit Job
+                              </Link>
+                              {isClosed ? (
                                 <button
                                   onClick={() => {
                                     onActionClick(job, "publish");
                                     setActiveMenuId(null);
                                   }}
-                                  className="flex w-full px-4 py-2 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors font-medium"
+                                  className="flex w-full px-4 py-2 text-[13px] text-emerald-600 hover:bg-[#F5F5F7] transition-colors font-medium"
                                 >
-                                  Publish Job
+                                  Re-Open Job
                                 </button>
-                              )}
-                              {!isClosed && (
+                              ) : (
                                 <button
                                   onClick={() => {
                                     onActionClick(job, "archive");
                                     setActiveMenuId(null);
                                   }}
-                                  className="flex w-full px-4 py-2 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors font-medium"
+                                  className="flex w-full px-4 py-2 text-[13px] text-amber-600 hover:bg-[#F5F5F7] transition-colors font-medium"
                                 >
-                                  Archive Job
+                                  Close Job
                                 </button>
                               )}
                               <div className="my-1 border-t border-[#E8E8ED]" />

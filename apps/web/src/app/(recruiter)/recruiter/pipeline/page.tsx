@@ -7,7 +7,8 @@ import { ScheduleFinalInterviewModal } from "@/components/interview/ScheduleFina
 import { logger } from "@smarthire/logger";
 import { isTechDomain } from "@/utils/domain-utils";
 import { SkeletonMetric, SkeletonCard } from "@/components/shared/Skeleton";
-import { CheckCircle2, ChevronRight, Loader2, Briefcase, Video, UserCheck, Calendar, Clock, UploadCloud, FileText, X, FileCheck, Sparkles, BarChart3, FileCode } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, ChevronRight, Loader2, Briefcase, Video, UserCheck, Calendar, Clock, UploadCloud, FileText, X, FileCheck, Sparkles, BarChart3, FileCode, Edit, Lock } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 
 import { useRouter } from "next/navigation";
@@ -1483,6 +1484,81 @@ const DOMAIN_QUESTION_PRESETS: Record<string, { label: string; description: stri
           onClearFilters={handleClearAll}
         />
       </div>
+
+      {/* Recruiter Job Management Operations Bar */}
+      {selectedJobId && activeJobDetails && (
+        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white border border-zinc-200 shadow-xs gap-3 flex-wrap text-left">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+              <Briefcase className="h-4.5 w-4.5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-extrabold text-zinc-900">{activeJobDetails.title}</h2>
+                <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                  activeJobDetails.status === "closed" ? "bg-red-100 text-red-700 border border-red-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                }`}>
+                  {activeJobDetails.status || "published"}
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-500 font-medium">
+                {activeJobDetails.category || "Technology"} • {activeJobDetails.location || "Remote"} • {cards.length} Total Applicants
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Edit Job Button */}
+            <Link
+              href={`/recruiter/jobs/${selectedJobId}/edit`}
+              className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            >
+              <Edit className="h-3.5 w-3.5 text-blue-400" />
+              <span>Edit Job</span>
+            </Link>
+
+            {/* Close / Reopen Job Button */}
+            <button
+              type="button"
+              onClick={async () => {
+                const newStatus = activeJobDetails.status === "closed" ? "published" : "closed";
+                try {
+                  await supabase.schema("job").from("jobs").update({ status: newStatus }).eq("id", selectedJobId);
+                  setActiveJobDetails((prev) => prev ? { ...prev, status: newStatus } : null);
+                  fetchPipelineData();
+                } catch (err) {
+                  logger.error("Failed to toggle job status", err);
+                }
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer border shadow-xs ${
+                activeJobDetails.status === "closed"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600"
+                  : "bg-red-50 hover:bg-red-100 text-red-600 border-red-200"
+              }`}
+            >
+              {activeJobDetails.status === "closed" ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Re-Open Job</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="h-3.5 w-3.5" />
+                  <span>Close Job</span>
+                </>
+              )}
+            </button>
+
+            {/* View Job Overview */}
+            <Link
+              href={`/recruiter/jobs/${selectedJobId}`}
+              className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-xs flex items-center gap-1 border border-blue-200 transition-colors cursor-pointer"
+            >
+              <span>Overview Details →</span>
+            </Link>
+          </div>
+        </div>
+      )}
       {/* Two-Level View Switcher Toolbar */}
       <div className="flex items-center justify-between py-2 border-b border-zinc-200 gap-4 flex-wrap">
         <div className="flex items-center gap-2">

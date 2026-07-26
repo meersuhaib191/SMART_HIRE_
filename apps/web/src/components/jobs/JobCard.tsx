@@ -51,7 +51,6 @@ export function JobCard({ job, onActionClick }: JobCardProps) {
   };
 
   const isClosed = job.status === "closed";
-  const isDraft = job.status === "draft";
 
   return (
     <div className="group rounded-[16px] border border-[#D2D2D7] bg-white p-6 flex flex-col justify-between gap-5 transition-all duration-200 hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.08)] hover:border-[#AEAEB2]">
@@ -78,29 +77,35 @@ export function JobCard({ job, onActionClick }: JobCardProps) {
               <MoreHorizontal className="h-4 w-4" />
             </button>
             {showMenu && (
-              <div className="sh-scale-in absolute right-0 mt-1.5 w-40 rounded-[14px] border border-[#D2D2D7] bg-white py-1.5 shadow-lg z-30 text-left">
-                {isDraft && (
+              <div className="sh-scale-in absolute right-0 mt-1.5 w-44 rounded-[14px] border border-[#D2D2D7] bg-white py-1.5 shadow-lg z-30 text-left">
+                <Link
+                  href={`/recruiter/jobs/${job.id}/edit`}
+                  onClick={() => setShowMenu(false)}
+                  className="flex w-full items-center px-4 py-2 text-[13px] font-semibold text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
+                >
+                  Edit Job
+                </Link>
+                {isClosed ? (
                   <button
                     onClick={() => { onActionClick(job, "publish"); setShowMenu(false); }}
-                    className="flex w-full items-center px-4 py-2 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
+                    className="flex w-full items-center px-4 py-2 text-[13px] font-semibold text-emerald-600 hover:bg-[#F5F5F7] transition-colors"
                   >
-                    Publish
+                    Re-Open Job
                   </button>
-                )}
-                {!isClosed && (
+                ) : (
                   <button
                     onClick={() => { onActionClick(job, "archive"); setShowMenu(false); }}
-                    className="flex w-full items-center px-4 py-2 text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
+                    className="flex w-full items-center px-4 py-2 text-[13px] font-semibold text-amber-600 hover:bg-[#F5F5F7] transition-colors"
                   >
-                    Archive
+                    Close Job
                   </button>
                 )}
                 <div className="my-1 border-t border-[#E8E8ED]" />
                 <button
                   onClick={() => { onActionClick(job, "delete"); setShowMenu(false); }}
-                  className="flex w-full items-center px-4 py-2 text-[13px] text-[#FF3B30] hover:bg-[#FFF0EE] transition-colors"
+                  className="flex w-full items-center px-4 py-2 text-[13px] font-bold text-[#FF3B30] hover:bg-[#FFF0EE] transition-colors"
                 >
-                  Delete
+                  Delete Job
                 </button>
               </div>
             )}
